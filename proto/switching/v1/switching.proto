@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package switching.v1;
+
+option go_package = "omnifoni/switching/gen/switchingpb";
+
+// Switching owns call lifecycle and drives the OCS per docs/master-plan.md
+// section 3.2. Termination must follow balance exhaustion by at most one
+// charge tick (P1 gate).
+service Switching {
+  // Starts a call: authorizes with Charging, then decrements live.
+  rpc StartCall(StartCallRequest) returns (StartCallResponse);
+  // Ends a call and releases the OCS reservation.
+  rpc StopCall(StopCallRequest) returns (StopCallResponse);
+  // Server-streamed lifecycle events for one call, replayed from the start.
+  rpc CallEvents(CallEventsRequest) returns (stream CallEvent);
+}
+
+message StartCallRequest {
+  string account_id = 1;
+  string destination = 2;
+  string cli = 3;
+}
+
+message StartCallResponse {
+  bool allowed = 1;
+  string reason = 2; // "" ok, else the Charging deny reason or ocs_unavailable
+  string call_id = 3;
+  string session_id = 4;
+  int64 max_seconds = 5;
+}
+
+message StopCallRequest {
+  string call_id = 1;
+}
+
+message StopCallResponse {
+  bool stopped = 1;
+}
+
+message CallEventsRequest {
+  string call_id = 1;
+}
+
+message CallEvent {
+  string call_id = 1;
+  Type type = 2;
+  string reason = 3; // terminated: balance_exhausted | ocs_unavailable
+  int64 charged_seconds = 4;
+
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    STARTED = 1;
+    TERMINATED = 2;
+    RELEASED = 3;
+  }
+}

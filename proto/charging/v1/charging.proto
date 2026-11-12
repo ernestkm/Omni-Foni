@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package charging.v1;
+
+option go_package = "omnifoni/charging/gen/chargingpb";
+
+// Charging is the OCS boundary from docs/master-plan.md section 3.2.
+// All money is integer minor units (1/10000 of a currency).
+service Charging {
+  // Pre-call authorization. Fail-closed: any internal error denies.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+  // Live decrement. total_seconds is the cumulative charged count; retries are
+  // idempotent. denied=true means the switch must terminate the call.
+  rpc Charge(ChargeRequest) returns (ChargeResponse);
+  // End of call; releases the reservation.
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+}
+
+message AuthorizeRequest {
+  string account_id = 1;
+  string destination = 2; // E.164 normalized
+  string cli = 3;         // reserved for CLI-based rate selection (plan D1)
+}
+
+message AuthorizeResponse {
+  bool allow = 1;
+  string reason = 2; // "": ok, else no_account|no_rate|insufficient_balance|internal_error
+  int64 max_seconds = 3;
+  string session_id = 4; // UUID issued by the server when allowed
+}
+
+message ChargeRequest {
+  string session_id = 1;
+  int64 total_seconds = 2; // monotonic cumulative, never decreases
+}
+
+message ChargeResponse {
+  bool applied = 1;    // false on retry of an already-applied total or after release
+  bool denied = 2;     // true: insufficient funds, switch must terminate
+  int64 charged_seconds = 3;
+  int64 balance_minor = 4;
+}
+
+message ReleaseRequest {
+  string session_id = 1;
+}
+
+message ReleaseResponse {
+  bool released = 1;
+}

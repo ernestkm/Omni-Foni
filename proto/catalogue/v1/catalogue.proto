@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package catalogue.v1;
+
+option go_package = "omnifoni/catalogue/gen/cataloguepb";
+
+// Catalogue owns rate definitions. Longest-prefix matching happens here so
+// every consumer (Charging today, Rating/Mediation later) sees one truth.
+service Catalogue {
+  // GetRate resolves the best matching rate for a destination.
+  rpc GetRate(GetRateRequest) returns (GetRateResponse);
+  // PutRate upserts one rate (admin/dev path).
+  rpc PutRate(PutRateRequest) returns (PutRateResponse);
+}
+
+message GetRateRequest {
+  string destination = 1;
+}
+
+message GetRateResponse {
+  bool found = 1;
+  string matched_prefix = 2;
+  string rate_per_sec = 3; // decimal minor units per second
+}
+
+message PutRateRequest {
+  string prefix = 1;
+  string rate_per_sec = 2; // decimal minor units per second
+}
+
+message PutRateResponse {}

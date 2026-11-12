@@ -1,0 +1,9 @@
+FROM golang:1.27 AS build
+WORKDIR /src
+COPY charging/ ./charging/
+COPY switching/ ./switching/
+RUN cd switching && CGO_ENABLED=0 go build -o /switching .
+
+FROM gcr.io/distroless/static:nonroot
+COPY --from=build /switching /switching
+ENTRYPOINT ["/switching"]
