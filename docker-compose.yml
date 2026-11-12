@@ -95,6 +95,7 @@ services:
       dockerfile: switching/Dockerfile
     environment:
       SWITCHING_CHARGING_ADDR: charging:50051
+      SWITCHING_KAFKA: kafka:9092
       SWITCHING_ADDR: ":50052"
       SWITCHING_REFLECTION: "1"
     ports:

@@ -56,8 +56,8 @@ func TestMain(m *testing.M) {
 }
 
 // startSwitching serves an in-process switching server backed by the given
-// charging endpoint and returns a client connection to it.
-func startSwitching(t *testing.T, chargingEndpoint string) *grpc.ClientConn {
+// charging endpoint and returns a client connection to it. pub may be nil.
+func startSwitchingWithCDR(t *testing.T, chargingEndpoint string, pub CDRPublisher) *grpc.ClientConn {
 	t.Helper()
 	cc, err := grpc.NewClient(chargingEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -67,7 +67,7 @@ func startSwitching(t *testing.T, chargingEndpoint string) *grpc.ClientConn {
 
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
-	pb.RegisterSwitchingServer(srv, &switchingServer{reg: NewRegistry(), cc: cc})
+	pb.RegisterSwitchingServer(srv, &switchingServer{reg: NewRegistryWithCDRs(pub), cc: cc})
 	go srv.Serve(lis)
 	t.Cleanup(srv.Stop)
 
@@ -81,6 +81,10 @@ func startSwitching(t *testing.T, chargingEndpoint string) *grpc.ClientConn {
 	}
 	t.Cleanup(func() { client.Close() })
 	return client
+}
+
+func startSwitching(t *testing.T, chargingEndpoint string) *grpc.ClientConn {
+	return startSwitchingWithCDR(t, chargingEndpoint, nil)
 }
 
 // seed creates an account and one rate row; dest must start with prefix.
