@@ -45,6 +45,7 @@ func main() {
 		kgo.ConsumeTopics(raw),
 		kgo.ConsumeStartOffset(kgo.NewOffset().AtStart()),
 		kgo.DisableAutoCommit(), // commit only after handling
+		kgo.AllowAutoTopicCreation(),
 	)
 	if err != nil {
 		slog.Error("kafka client", "err", err)

@@ -147,8 +147,8 @@ func TestHandlePipeline(t *testing.T) {
 		cdrRecord(t, "cdrs.raw", valid),
 		cdrRecord(t, "cdrs.raw", valid), // duplicate of the same call
 		cdrRecord(t, "cdrs.raw", valid2),
-		&kgo.Record{Topic: "cdrs.raw", Key: []byte("bad"), Value: []byte("not-proto")}, // malformed bytes: elements of []*kgo.Record need &
-		cdrRecord(t, "cdrs.raw", &pb.CallCdr{AccountId: "a-2", EndReason: "normal"}),   // no call_id
+		&kgo.Record{Topic: "cdrs.raw", Key: []byte("bad"), Value: []byte("not-proto")},
+		cdrRecord(t, "cdrs.raw", &pb.CallCdr{AccountId: "a-2", EndReason: "normal"}), // no call_id
 	}
 	for _, rec := range recs {
 		if err := p.Handle(ctx, rec); err != nil {

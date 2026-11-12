@@ -49,6 +49,9 @@ func validReason(r string) bool {
 func Run(ctx context.Context, cl *kgo.Client, p *Processor) {
 	for {
 		fetches := cl.PollRecords(ctx, 100)
+		fetches.EachError(func(topic string, partition int32, err error) {
+			slog.Error("kafka fetch", "topic", topic, "partition", partition, "err", err)
+		})
 		lasts := map[string]*kgo.Record{}
 		for iter := fetches.RecordIter(); !iter.Done(); {
 			rec := iter.Next()

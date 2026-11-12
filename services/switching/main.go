@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"time"
 
 	kgo "github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/grpc"
@@ -29,7 +30,9 @@ func main() {
 		// ponytail: dev default; production composes from secrets
 		brokers[0] = "localhost:9092"
 	}
-	prod, err := kgo.NewClient(kgo.SeedBrokers(brokers...))
+	prod, err := kgo.NewClient(kgo.SeedBrokers(brokers...),
+		kgo.AllowAutoTopicCreation(),
+		kgo.RecordDeliveryTimeout(10*time.Second))
 	if err != nil {
 		slog.Error("cdr producer", "err", err)
 		os.Exit(1)
