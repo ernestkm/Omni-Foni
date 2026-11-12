@@ -28,6 +28,7 @@ Open-source clean-room BSS/OCS for VoIP operators. Master plan in `docs/master-p
 
 - Go lives in `/usr/local/go`, symlinked to `/usr/local/bin/go`. Installed outside apt; update by replacing the tarball.
 - Docker daemon was started with `nohup dockerd` (no systemd); after host restart run `nohup dockerd >/var/log/dockerd.log 2>&1 &` before `make up`.
+- `make up` reuses existing images and never rebuilds; after changing a service's code run `docker compose build <service>` before `make up` (or `docker compose up -d --build`). A stale image once masked both a broken Dockerfile and a code change.
 - Host-side go tests reach the dev broker via 127.0.0.1 kafka in /etc/hosts (the broker advertises kafka:9092); keep the entry for host tests.
 
 ## Conventions for filling this file
