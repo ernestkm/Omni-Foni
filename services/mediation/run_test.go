@@ -25,8 +25,6 @@ func TestRunLoop(t *testing.T) {
 	norm := raw + "-normalized"
 	p := NewProcessor(pool, prod, norm, "cdrs.rejected")
 
-	// ProduceSync gives up on unknown topics before the broker's
-	// auto-create lands, so create the per-test topics up front.
 	admin := kadm.NewClient(prod)
 	created, err := admin.CreateTopics(context.Background(), 1, 1, nil, raw, norm)
 	if err != nil {
