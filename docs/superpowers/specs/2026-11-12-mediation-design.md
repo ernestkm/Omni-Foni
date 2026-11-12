@@ -77,6 +77,7 @@ Correctness note: Kafka messages are keyed by `call_id`, so all records for one 
 
 - Crash between insert and produce: redelivery finds the row unpublished → produce happens on retry. No loss.
 - Crash after produce, before publish-flag/offset commit: redelivery finds the row published → skip. No duplicate output.
+- Residual window: a crash between producing to `cdrs.normalized` and marking the row published makes the redelivered record produce once more after recovery. Mediation is therefore at-least-once; the downstream Billing `call_id` primary key collapses that residual duplicate, so the P2 "exactly one billed record" gate holds.
 - DB or Kafka unavailable: retry with backoff, do not commit the offset, do not exit; log with call_id correlation. Mediation never fails open.
 
 ## Testing
@@ -84,7 +85,7 @@ Correctness note: Kafka messages are keyed by `call_id`, so all records for one 
 - `make test` gains `services/mediation`; tests need the compose stack (real Postgres and Kafka), like the existing services.
 - Mediation integration test: seed `cdrs.raw` with a producer (valid record, duplicate of it, malformed bytes, invalid-field record); read `cdrs.normalized` and `cdrs.rejected`; assert exactly one normalized record per unique valid call_id, malformed and invalid records in rejected with the right reason, and that a second pass of the same inputs produces zero new normalized records.
 - Switching test: start and stop a call (existing harness), assert exactly one CallCdr lands on `cdrs.raw` with the call's fields.
-- Smoke (`ops/smoke.sh`) unchanged this slice.
+- Smoke (`ops/smoke.sh`): the context-database count check gains `mediation` (7 → 8).
 
 ## Out of scope
 
