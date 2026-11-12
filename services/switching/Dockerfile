@@ -1,6 +1,7 @@
 FROM golang:1.27 AS build
 WORKDIR /src
 COPY charging/ ./charging/
+COPY mediation/ ./mediation/
 COPY switching/ ./switching/
 RUN cd switching && CGO_ENABLED=0 go build -o /switching .
 
