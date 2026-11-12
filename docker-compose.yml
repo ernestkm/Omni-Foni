@@ -75,7 +75,9 @@ services:
       retries: 10
 
   charging:
-    build: ./services/charging
+    build:
+      context: ./services
+      dockerfile: charging/Dockerfile
     environment:
       CHARGING_DSN: postgres://postgres:dev-only@postgres:5432/charging
       CHARGING_ADDR: ":50051"
