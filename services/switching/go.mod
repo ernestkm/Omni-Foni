@@ -2,6 +2,8 @@ module omnifoni/switching
 
 go 1.27.4
 
+replace omnifoni/mediation => ../mediation
+
 replace omnifoni/charging => ../charging
 
 require (
@@ -10,6 +12,7 @@ require (
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
 	omnifoni/charging v0.0.0-00010101000000-000000000000
+	omnifoni/mediation v0.0.0-00010101000000-000000000000
 )
 
 require (

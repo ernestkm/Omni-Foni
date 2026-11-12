@@ -10,19 +10,29 @@ import (
 	"google.golang.org/grpc"
 
 	chargingpb "omnifoni/charging/gen/chargingpb"
+	mediationpb "omnifoni/mediation/gen/mediationpb"
 	pb "omnifoni/switching/gen/switchingpb"
 )
 
 // Registry tracks live calls and their event streams.
 type Registry struct {
-	mu    sync.Mutex
-	calls map[string]*call
+	mu     sync.Mutex
+	calls  map[string]*call
+	cdrPub CDRPublisher // nil in tests without Kafka
+}
+
+// CDRPublisher emits the final call record for a finished call.
+type CDRPublisher interface {
+	PublishCDR(c *mediationpb.CallCdr) error
 }
 
 type call struct {
 	id, sessionID string
 	stop          chan struct{}
 	stopOnce      sync.Once
+
+	accountID, destination, cli string
+	start                       time.Time
 
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -32,6 +42,12 @@ type call struct {
 
 func NewRegistry() *Registry {
 	return &Registry{calls: map[string]*call{}}
+}
+
+func NewRegistryWithCDRs(pub CDRPublisher) *Registry {
+	r := NewRegistry()
+	r.cdrPub = pub
+	return r
 }
 
 // StartCall authorizes with the OCS, then decrements live. Denied calls and
@@ -50,7 +66,11 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 
 	c := &call{
 		id: uuid.New().String(), sessionID: cauth.GetSessionId(),
-		stop: make(chan struct{}),
+		stop:        make(chan struct{}),
+		accountID:   req.GetAccountId(),
+		destination: req.GetDestination(),
+		cli:         req.GetCli(),
+		start:       time.Now(),
 	}
 	c.cond = sync.NewCond(&c.mu)
 	r.mu.Lock()
@@ -88,6 +108,7 @@ func (r *Registry) runCall(cc *grpc.ClientConn, c *call) {
 				&chargingpb.ReleaseRequest{SessionId: c.sessionID})
 			c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_RELEASED,
 				ChargedSeconds: total})
+			r.publishCDR(c, "normal", total)
 			return
 		case <-ticker.C:
 			total++
@@ -98,10 +119,12 @@ func (r *Registry) runCall(cc *grpc.ClientConn, c *call) {
 				slog.Error("ocs charge failed, terminating", "call", c.id, "err", err)
 				c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_TERMINATED,
 					Reason: "ocs_unavailable", ChargedSeconds: total})
+				r.publishCDR(c, "ocs_unavailable", total)
 				return
 			case resp.GetDenied():
 				c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_TERMINATED,
 					Reason: "balance_exhausted", ChargedSeconds: total})
+				r.publishCDR(c, "balance_exhausted", total)
 				return
 			}
 		}
@@ -147,5 +170,15 @@ func (c *call) Stream(send func(*pb.CallEvent) error) error {
 			return nil
 		}
 		c.cond.Wait()
+	}
+}
+
+func (r *Registry) publishCDR(c *call, endReason string, total int64) {
+	if r.cdrPub == nil {
+		return // ponytail: nil in tests without Kafka; production always wires one
+	}
+	err := r.cdrPub.PublishCDR(buildCDR(c, endReason, total, time.Now()))
+	if err != nil {
+		slog.Error("cdr publish failed", "call", c.id, "err", err)
 	}
 }
