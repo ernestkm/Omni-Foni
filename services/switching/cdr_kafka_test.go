@@ -45,7 +45,7 @@ func ensureTopic(t *testing.T, cl *kgo.Client, topic string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(details) == 1 {
+		if d, ok := details[topic]; ok && d.Err == nil {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
