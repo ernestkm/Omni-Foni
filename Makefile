@@ -30,3 +30,5 @@ protoc:
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/switching --go_opt=module=omnifoni/switching \
 		--go-grpc_out=services/switching --go-grpc_opt=module=omnifoni/switching \
 		proto/switching/v1/switching.proto
+	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/mediation --go_opt=module=omnifoni/mediation \
+		proto/mediation/v1/mediation.proto

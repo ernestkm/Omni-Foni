@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package mediation.v1;
+
+option go_package = "omnifoni/mediation/gen/mediationpb";
+
+// CallCdr is the call detail record flowing from Switching to Mediation on
+// cdrs.raw and from Mediation to Billing on cdrs.normalized
+// (docs/master-plan.md section 3.2; protobuf per the mediation slice spec).
+message CallCdr {
+  string call_id = 1;
+  string account_id = 2;
+  string destination = 3;
+  string cli = 4;
+  int64 started_at_ms = 5;
+  int64 ended_at_ms = 6;
+  int64 charged_seconds = 7;
+  string end_reason = 8; // normal | balance_exhausted | ocs_unavailable
+}
