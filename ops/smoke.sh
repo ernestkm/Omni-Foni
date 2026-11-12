@@ -12,8 +12,8 @@ done
 
 docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT 1 FROM pg_database WHERE datname='charging'" | grep -q 1 || fail "charging DB missing"
 
-dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc')")
-[ "$dbs" = "7" ] || fail "expected 7 context databases, got $dbs"
+dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','mediation')")
+[ "$dbs" = "8" ] || fail "expected 8 context databases, got $dbs"
 
 docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"

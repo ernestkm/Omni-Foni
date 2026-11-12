@@ -102,6 +102,17 @@ services:
     depends_on:
       - charging
 
+  mediation:
+    build: ./services/mediation
+    environment:
+      MEDIATION_DSN: postgres://postgres:dev-only@postgres:5432/mediation
+      MEDIATION_KAFKA: kafka:9092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
 volumes:
   pgdata:
   valkeydata:
