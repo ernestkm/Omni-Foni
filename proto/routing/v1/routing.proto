@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package routing.v1;
+
+option go_package = "omnifoni/routing/gen/routingpb";
+
+// Routing owns the dial plan: maps dialed number prefixes to outbound trunks.
+service Routing {
+  // Resolve longest-prefix matches the number against configured rules.
+  rpc Resolve(ResolveRequest) returns (ResolveResponse);
+  // PutRule upserts one prefix rule.
+  rpc PutRule(PutRuleRequest) returns (PutRuleResponse);
+  // PutLcrRoute upserts one least-cost-route candidate: a prefix may have
+  // several candidate trunks, each with its own cost.
+  rpc PutLcrRoute(PutLcrRouteRequest) returns (PutLcrRouteResponse);
+  // ResolveLcr selects the cheapest enabled candidate trunk for the number.
+  // Cost is minor units per second; ties break on longest prefix, then trunk id.
+  rpc ResolveLcr(ResolveRequest) returns (ResolveLcrResponse);
+  // PutTrunk registers a trunk and its enabled state (validity for LCR).
+  rpc PutTrunk(PutTrunkRequest) returns (PutTrunkResponse);
+}
+
+message ResolveRequest {
+  string number = 1; // dialed digits, no formatting
+}
+
+message ResolveResponse {
+  string trunk_id = 1; // empty means no rule matched
+}
+
+message PutRuleRequest {
+  string prefix = 1;
+  string trunk_id = 2;
+}
+
+message PutRuleResponse {}
+
+message PutLcrRouteRequest {
+  string prefix = 1;
+  string trunk_id = 2;
+  int64 cost_per_sec = 3; // minor units
+}
+
+message PutLcrRouteResponse {}
+
+message ResolveLcrResponse {
+  string trunk_id = 1;  // empty means no enabled candidate matched
+  int64 cost_per_sec = 2;
+}
+
+message PutTrunkRequest {
+  string trunk_id = 1;
+  bool enabled = 2;
+}
+
+message PutTrunkResponse {}

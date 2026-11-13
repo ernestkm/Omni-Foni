@@ -109,6 +109,7 @@ services:
       dockerfile: switching/Dockerfile
     environment:
       SWITCHING_CHARGING_ADDR: charging:50051
+      SWITCHING_ROUTING_ADDR: routing:50057
       SWITCHING_KAFKA: kafka:9092
       SWITCHING_ADDR: ":50052"
       SWITCHING_REFLECTION: "1"
@@ -116,6 +117,7 @@ services:
       - "50052:50052"
     depends_on:
       - charging
+      - routing
 
   mediation:
     build: ./services/mediation
@@ -161,6 +163,18 @@ services:
         condition: service_healthy
       billing:
         condition: service_started
+
+  routing:
+    build: ./services/routing
+    environment:
+      ROUTING_DSN: postgres://postgres:dev-only@postgres:5432/routing
+      ROUTING_ADDR: ":50057"
+      ROUTING_REFLECTION: "1"
+    ports:
+      - "50057:50057"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
