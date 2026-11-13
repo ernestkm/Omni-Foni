@@ -91,6 +91,18 @@ services:
       catalogue:
         condition: service_started
 
+  payments:
+    build: ./services/payments
+    environment:
+      PAYMENTS_DSN: postgres://postgres:dev-only@postgres:5432/payments
+      PAYMENTS_ADDR: ":50055"
+      PAYMENTS_WEBHOOK_SECRET: dev-only
+    ports:
+      - "50055:50055"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   switching:
     build:
       context: ./services
