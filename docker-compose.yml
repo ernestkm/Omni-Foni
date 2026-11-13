@@ -148,6 +148,20 @@ services:
       catalogue:
         condition: service_started
 
+  identity:
+    build: ./services/identity
+    environment:
+      IDENTITY_DSN: postgres://postgres:dev-only@postgres:5432/identity
+      IDENTITY_ADDR: ":50056"
+      IDENTITY_BILLING_ADDR: billing:50054
+    ports:
+      - "50056:50056"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      billing:
+        condition: service_started
+
 volumes:
   pgdata:
   valkeydata:
