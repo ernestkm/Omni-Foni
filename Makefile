@@ -16,6 +16,7 @@ smoke:
 	bash ops/smoke.sh
 
 test:
+	cd services/billing && go vet ./... && go test ./...
 	cd services/catalogue && go vet ./... && go test ./...
 	cd services/charging && go vet ./... && go test ./...
 	cd services/mediation && go vet ./... && go test ./...
@@ -33,3 +34,6 @@ protoc:
 		proto/switching/v1/switching.proto
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/mediation --go_opt=module=omnifoni/mediation \
 		proto/mediation/v1/mediation.proto
+	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/billing --go_opt=module=omnifoni/billing \
+		--go-grpc_out=services/billing --go-grpc_opt=module=omnifoni/billing \
+		proto/billing/v1/billing.proto

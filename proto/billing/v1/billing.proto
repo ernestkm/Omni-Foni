@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package billing.v1;
+
+option go_package = "omnifoni/billing/gen/billingpb";
+
+// Billing turns normalized CDRs into invoice lines (one per call, dedup by
+// call_id) and answers invoice totals per account and period. Periods are
+// YYYY-MM in UTC.
+service Billing {
+  // GetInvoice returns the invoice for one account and period, including the
+  // per-line detail. A missing invoice is an empty response, not an error.
+  rpc GetInvoice(GetInvoiceRequest) returns (GetInvoiceResponse);
+  // GetInvoicesByAccounts returns per-account totals for a batch of accounts
+  // and one period (the tenant→accounts join stays in the caller).
+  rpc GetInvoicesByAccounts(GetInvoicesByAccountsRequest) returns (GetInvoicesByAccountsResponse);
+}
+
+message GetInvoiceRequest {
+  string account_id = 1;
+  string period = 2; // YYYY-MM
+}
+
+message GetInvoiceResponse {
+  string account_id = 1;
+  string period = 2;
+  int64 total_minor = 3;
+  int64 line_count = 4;
+  repeated InvoiceLine lines = 5;
+}
+
+message InvoiceLine {
+  string call_id = 1;
+  int64 charged_seconds = 2;
+  int64 amount_minor = 3;
+  string rate_per_sec = 4;
+}
+
+message GetInvoicesByAccountsRequest {
+  repeated string account_ids = 1;
+  string period = 2; // YYYY-MM
+}
+
+message GetInvoicesByAccountsResponse {
+  repeated AccountTotal totals = 1;
+}
+
+message AccountTotal {
+  string account_id = 1;
+  int64 total_minor = 2;
+  int64 line_count = 3;
+}

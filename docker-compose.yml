@@ -116,6 +116,26 @@ services:
       kafka:
         condition: service_healthy
 
+  billing:
+    build:
+      context: ./services
+      dockerfile: billing/Dockerfile
+    environment:
+      BILLING_DSN: postgres://postgres:dev-only@postgres:5432/billing
+      BILLING_KAFKA: kafka:9092
+      BILLING_CATALOGUE_ADDR: catalogue:50053
+      BILLING_ADDR: ":50054"
+      BILLING_REFLECTION: "1"
+    ports:
+      - "50054:50054"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      catalogue:
+        condition: service_started
+
 volumes:
   pgdata:
   valkeydata:
