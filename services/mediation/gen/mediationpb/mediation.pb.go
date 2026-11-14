@@ -34,6 +34,7 @@ type CallCdr struct {
 	EndedAtMs      int64                  `protobuf:"varint,6,opt,name=ended_at_ms,json=endedAtMs,proto3" json:"ended_at_ms,omitempty"`
 	ChargedSeconds int64                  `protobuf:"varint,7,opt,name=charged_seconds,json=chargedSeconds,proto3" json:"charged_seconds,omitempty"`
 	EndReason      string                 `protobuf:"bytes,8,opt,name=end_reason,json=endReason,proto3" json:"end_reason,omitempty"` // normal | balance_exhausted | ocs_unavailable
+	TrunkId        string                 `protobuf:"bytes,9,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`       // LCR-resolved trunk; empty when routing is unwired or did not match
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -124,11 +125,18 @@ func (x *CallCdr) GetEndReason() string {
 	return ""
 }
 
+func (x *CallCdr) GetTrunkId() string {
+	if x != nil {
+		return x.TrunkId
+	}
+	return ""
+}
+
 var File_mediation_v1_mediation_proto protoreflect.FileDescriptor
 
 const file_mediation_v1_mediation_proto_rawDesc = "" +
 	"\n" +
-	"\x1cmediation/v1/mediation.proto\x12\fmediation.v1\"\x81\x02\n" +
+	"\x1cmediation/v1/mediation.proto\x12\fmediation.v1\"\x9c\x02\n" +
 	"\aCallCdr\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x1d\n" +
 	"\n" +
@@ -139,7 +147,8 @@ const file_mediation_v1_mediation_proto_rawDesc = "" +
 	"\vended_at_ms\x18\x06 \x01(\x03R\tendedAtMs\x12'\n" +
 	"\x0fcharged_seconds\x18\a \x01(\x03R\x0echargedSeconds\x12\x1d\n" +
 	"\n" +
-	"end_reason\x18\b \x01(\tR\tendReasonB$Z\"omnifoni/mediation/gen/mediationpbb\x06proto3"
+	"end_reason\x18\b \x01(\tR\tendReason\x12\x19\n" +
+	"\btrunk_id\x18\t \x01(\tR\atrunkIdB$Z\"omnifoni/mediation/gen/mediationpbb\x06proto3"
 
 var (
 	file_mediation_v1_mediation_proto_rawDescOnce sync.Once

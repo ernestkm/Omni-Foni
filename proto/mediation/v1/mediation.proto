@@ -16,4 +16,5 @@ message CallCdr {
   int64 ended_at_ms = 6;
   int64 charged_seconds = 7;
   string end_reason = 8; // normal | balance_exhausted | ocs_unavailable
+  string trunk_id = 9; // LCR-resolved trunk; empty when routing is unwired or did not match
 }
