@@ -47,3 +47,6 @@ protoc:
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/sbc --go_opt=module=omnifoni/sbc \
 		--go-grpc_out=services/sbc --go-grpc_opt=module=omnifoni/sbc \
 		proto/sbc/v1/sbc.proto
+	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/payments --go_opt=module=omnifoni/payments \
+		--go-grpc_out=services/payments --go-grpc_opt=module=omnifoni/payments \
+		proto/payments/v1/payments.proto

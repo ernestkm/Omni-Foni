@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -10,6 +11,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
+
+	pb "omnifoni/payments/gen/paymentspb"
 )
 
 func env(key, def string) string {
@@ -22,6 +26,7 @@ func env(key, def string) string {
 func main() {
 	dsn := env("PAYMENTS_DSN", "postgres://postgres:dev-only@postgres:5432/payments")
 	addr := env("PAYMENTS_ADDR", ":50055")
+	grpcAddr := env("PAYMENTS_GRPC_ADDR", ":50060")
 	// ponytail: dev secret; production injects per-gateway secrets from the
 	// secret store, keyed by gateway
 	secret := env("PAYMENTS_WEBHOOK_SECRET", "dev-only")
@@ -48,6 +53,25 @@ func main() {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+
+	lis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		slog.Error("grpc listen failed", "err", err)
+		os.Exit(1)
+	}
+	gsrv := grpc.NewServer()
+	pb.RegisterPaymentsServer(gsrv, &paymentsServer{pool: pool})
+	go func() {
+		<-ctx.Done()
+		gsrv.GracefulStop()
+	}()
+	go func() {
+		if err := gsrv.Serve(lis); err != nil {
+			slog.Error("grpc serve failed", "err", err)
+			os.Exit(1)
+		}
+	}()
+	slog.Info("payments gRPC up", "addr", grpcAddr)
 
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	slog.Info("payments up", "addr", addr)

@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package payments.v1;
+
+option go_package = "omnifoni/payments/gen/paymentspb";
+
+// Payments records gateway webhook payments idempotently and answers
+// per-period totals for reconciliation. Periods are YYYY-MM of created_at
+// in UTC.
+service Payments {
+  // GetPaymentsTotals returns per-account payment totals for one period.
+  // Accounts with no payments in the period are omitted; void payments are
+  // excluded.
+  rpc GetPaymentsTotals(GetPaymentsTotalsRequest) returns (GetPaymentsTotalsResponse);
+  // ListAccountsForPeriod returns the distinct account ids with recorded
+  // payments in one period.
+  rpc ListAccountsForPeriod(ListAccountsForPeriodRequest) returns (ListAccountsForPeriodResponse);
+}
+
+message GetPaymentsTotalsRequest {
+  string period = 1; // YYYY-MM
+}
+
+message PaymentsTotal {
+  string account_id = 1;
+  int64 payment_count = 2;
+  int64 amount_sum = 3;
+}
+
+message GetPaymentsTotalsResponse {
+  repeated PaymentsTotal totals = 1;
+}
+
+message ListAccountsForPeriodRequest {
+  string period = 1; // YYYY-MM
+}
+
+message ListAccountsForPeriodResponse {
+  repeated string account_ids = 1;
+}

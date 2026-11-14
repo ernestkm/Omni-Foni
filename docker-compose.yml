@@ -145,9 +145,11 @@ services:
     environment:
       PAYMENTS_DSN: postgres://postgres:dev-only@postgres:5432/payments
       PAYMENTS_ADDR: ":50055"
+      PAYMENTS_GRPC_ADDR: ":50060"
       PAYMENTS_WEBHOOK_SECRET: dev-only
     ports:
       - "50055:50055"
+      - "50060:50060"
     depends_on:
       postgres:
         condition: service_healthy
