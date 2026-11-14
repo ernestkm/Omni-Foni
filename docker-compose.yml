@@ -91,18 +91,6 @@ services:
       catalogue:
         condition: service_started
 
-  payments:
-    build: ./services/payments
-    environment:
-      PAYMENTS_DSN: postgres://postgres:dev-only@postgres:5432/payments
-      PAYMENTS_ADDR: ":50055"
-      PAYMENTS_WEBHOOK_SECRET: dev-only
-    ports:
-      - "50055:50055"
-    depends_on:
-      postgres:
-        condition: service_healthy
-
   switching:
     build:
       context: ./services
@@ -110,6 +98,7 @@ services:
     environment:
       SWITCHING_CHARGING_ADDR: charging:50051
       SWITCHING_ROUTING_ADDR: routing:50057
+      SWITCHING_SBC_ADDR: sbc:50058
       SWITCHING_KAFKA: kafka:9092
       SWITCHING_ADDR: ":50052"
       SWITCHING_REFLECTION: "1"
@@ -118,6 +107,7 @@ services:
     depends_on:
       - charging
       - routing
+      - sbc
 
   mediation:
     build: ./services/mediation
@@ -150,6 +140,18 @@ services:
       catalogue:
         condition: service_started
 
+  payments:
+    build: ./services/payments
+    environment:
+      PAYMENTS_DSN: postgres://postgres:dev-only@postgres:5432/payments
+      PAYMENTS_ADDR: ":50055"
+      PAYMENTS_WEBHOOK_SECRET: dev-only
+    ports:
+      - "50055:50055"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   identity:
     build: ./services/identity
     environment:
@@ -172,6 +174,18 @@ services:
       ROUTING_REFLECTION: "1"
     ports:
       - "50057:50057"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  sbc:
+    build: ./services/sbc
+    environment:
+      SBC_DSN: postgres://postgres:dev-only@postgres:5432/sbc
+      SBC_ADDR: ":50058"
+      SBC_REFLECTION: "1"
+    ports:
+      - "50058:50058"
     depends_on:
       postgres:
         condition: service_healthy

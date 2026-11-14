@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package sbc.v1;
+
+option go_package = "omnifoni/sbc/gen/sbcpb";
+
+// SBC is the session-border policy engine: call barring by destination or
+// caller id, per-trunk concurrent call limits, and automatic source blocking
+// after repeated authentication failures (the SIP edge enforcement point
+// later configures Kamailio from this verdicts API).
+service Sbc {
+  // CheckCall reserves one concurrent-call slot on the trunk and runs the
+  // barring/blocking playbook. Denied slots are never reserved.
+  rpc CheckCall(CheckCallRequest) returns (CheckCallResponse);
+  // EndCall releases the slot taken by a CheckCall.
+  rpc EndCall(EndCallRequest) returns (EndCallResponse);
+  // ReportAuthFailure records one failed authentication; past the threshold
+  // in the window, CheckCall starts denying that source automatically.
+  rpc ReportAuthFailure(ReportAuthFailureRequest) returns (ReportAuthFailureResponse);
+}
+
+message CheckCallRequest {
+  string call_id = 1;    // caller-generated id, also the slot key
+  string cli = 2;        // caller id
+  string destination = 3;
+  string trunk_id = 4;
+  string source_ip = 5;  // empty skips the intrusion check
+}
+
+message CheckCallResponse {
+  bool allowed = 1;
+  string reason = 2; // ip_blocked | barring_destination | barring_cli | trunk_limit_exceeded
+}
+
+message EndCallRequest {
+  string call_id = 1;
+}
+
+message EndCallResponse {}
+
+message ReportAuthFailureRequest {
+  string source_ip = 1;
+}
+
+message ReportAuthFailureResponse {}

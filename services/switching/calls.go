@@ -11,14 +11,62 @@ import (
 
 	chargingpb "omnifoni/charging/gen/chargingpb"
 	mediationpb "omnifoni/mediation/gen/mediationpb"
+	routingpb "omnifoni/routing/gen/routingpb"
+	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
 )
+
+// routingClient adapts the Routing gRPC client to RouteResolver. The call
+// path uses LCR: cheapest enabled trunk wins; plain dial-plan Resolve stays
+// available to other callers.
+type routingClient struct {
+	rc routingpb.RoutingClient
+}
+
+func (r routingClient) Resolve(ctx context.Context, number string) (string, error) {
+	res, err := r.rc.ResolveLcr(ctx, &routingpb.ResolveRequest{Number: number})
+	if err != nil {
+		return "", err
+	}
+	return res.GetTrunkId(), nil
+}
 
 // Registry tracks live calls and their event streams.
 type Registry struct {
 	mu     sync.Mutex
 	calls  map[string]*call
 	cdrPub CDRPublisher // nil in tests without Kafka
+	// routing is optional: nil skips dial-plan resolution (dev/tests);
+	// production always wires one and unrouted numbers deny.
+	routing RouteResolver
+	// sbc is optional: nil skips the barring/limit/blocking playbook
+	// (dev/tests); production wiring sets SWITCHING_SBC_ADDR and every call
+	// passes through it fail-closed.
+	sbc SbcChecker
+}
+
+// RouteResolver maps a dialed number to a trunk; empty means no rule matched.
+type RouteResolver interface {
+	Resolve(ctx context.Context, number string) (string, error)
+}
+
+// SbcChecker is the SBC playbook surface the call path needs.
+type SbcChecker interface {
+	CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (*sbcpb.CheckCallResponse, error)
+	EndCall(ctx context.Context, req *sbcpb.EndCallRequest) (*sbcpb.EndCallResponse, error)
+}
+
+// sbcClient adapts the SBC gRPC client.
+type sbcClient struct {
+	sc sbcpb.SbcClient
+}
+
+func (s sbcClient) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (*sbcpb.CheckCallResponse, error) {
+	return s.sc.CheckCall(ctx, req)
+}
+
+func (s sbcClient) EndCall(ctx context.Context, req *sbcpb.EndCallRequest) (*sbcpb.EndCallResponse, error) {
+	return s.sc.EndCall(ctx, req)
 }
 
 // CDRPublisher emits the final call record for a finished call.
@@ -50,9 +98,59 @@ func NewRegistryWithCDRs(pub CDRPublisher) *Registry {
 	return r
 }
 
-// StartCall authorizes with the OCS, then decrements live. Denied calls and
-// OCS errors are fail-closed: no call is created.
+// WithRouting installs dial-plan resolution; production wiring.
+func (r *Registry) WithRouting(res RouteResolver) *Registry {
+	r.routing = res
+	return r
+}
+
+// WithSBC installs the SBC playbook (barring, trunk limits, source
+// blocking); production wiring.
+func (r *Registry) WithSBC(s SbcChecker) *Registry {
+	r.sbc = s
+	return r
+}
+
+// StartCall resolves the dial plan, runs the SBC playbook, then authorizes
+// with the OCS. Unrouted numbers, barred calls, trunk-limit rejections,
+// routing/SBC/OCS outages, and denials are all fail-closed: no call is
+// created.
 func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.StartCallRequest) (*pb.StartCallResponse, error) {
+	callID := uuid.New().String()
+	var trunk string
+	if r.routing != nil {
+		var err error
+		trunk, err = r.routing.Resolve(ctx, req.GetDestination())
+		switch {
+		case err != nil:
+			slog.Error("routing unreachable, fail-closed", "call", req.GetDestination(), "err", err)
+			return &pb.StartCallResponse{Allowed: false, Reason: "routing_unavailable"}, nil
+		case trunk == "":
+			return &pb.StartCallResponse{Allowed: false, Reason: "no_route"}, nil
+		}
+	}
+	// Release the trunk slot reserved by CheckCall on every path where the
+	// call does not start; once handed over, the live call owns it.
+	slotOwned := false
+	releaseSlot := func() {
+		if r.sbc != nil && !slotOwned {
+			_, _ = r.sbc.EndCall(context.Background(), &sbcpb.EndCallRequest{CallId: callID})
+		}
+	}
+	defer releaseSlot()
+	if r.sbc != nil && trunk != "" {
+		sres, err := r.sbc.CheckCall(ctx, &sbcpb.CheckCallRequest{
+			CallId: callID, Cli: req.GetCli(), Destination: req.GetDestination(),
+			TrunkId: trunk, SourceIp: req.GetSourceIp(),
+		})
+		switch {
+		case err != nil:
+			slog.Error("sbc unreachable, fail-closed", "call", callID, "err", err)
+			return &pb.StartCallResponse{Allowed: false, Reason: "sbc_unavailable"}, nil
+		case !sres.GetAllowed():
+			return &pb.StartCallResponse{Allowed: false, Reason: sres.GetReason()}, nil
+		}
+	}
 	cauth, err := chargingpb.NewChargingClient(cc).Authorize(ctx, &chargingpb.AuthorizeRequest{
 		AccountId: req.GetAccountId(), Destination: req.GetDestination(), Cli: req.GetCli(),
 	})
@@ -65,7 +163,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 	}
 
 	c := &call{
-		id: uuid.New().String(), sessionID: cauth.GetSessionId(),
+		id: callID, sessionID: cauth.GetSessionId(),
 		stop:        make(chan struct{}),
 		accountID:   req.GetAccountId(),
 		destination: req.GetDestination(),
@@ -76,6 +174,12 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 	r.mu.Lock()
 	r.calls[c.id] = c
 	r.mu.Unlock()
+	// the live call owns the slot now; it releases at the end
+	slotOwned = true
+	go func() {
+		c.doneWait()
+		releaseSlot()
+	}()
 
 	c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_STARTED})
 	go r.runCall(cc, c)
@@ -147,6 +251,15 @@ func (c *call) emit(ev *pb.CallEvent) {
 	c.mu.Lock()
 	c.events = append(c.events, ev)
 	c.cond.Broadcast()
+	c.mu.Unlock()
+}
+
+// doneWait blocks until the call has finished.
+func (c *call) doneWait() {
+	c.mu.Lock()
+	for !c.done {
+		c.cond.Wait()
+	}
 	c.mu.Unlock()
 }
 

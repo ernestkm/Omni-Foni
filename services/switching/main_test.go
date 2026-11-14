@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,7 +16,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
+	cataloguepb "omnifoni/catalogue/gen/cataloguepb"
 	chargingpb "omnifoni/charging/gen/chargingpb"
+	routingpb "omnifoni/routing/gen/routingpb"
+	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
 )
 
@@ -58,6 +63,16 @@ func TestMain(m *testing.M) {
 // startSwitching serves an in-process switching server backed by the given
 // charging endpoint and returns a client connection to it. pub may be nil.
 func startSwitchingWithCDR(t *testing.T, chargingEndpoint string, pub CDRPublisher) *grpc.ClientConn {
+	return startSwitchingFull(t, chargingEndpoint, pub, nil)
+}
+
+// startSwitchingFull additionally wires a dial-plan resolver when non-nil
+// and an SBC checker when non-nil.
+func startSwitchingFull(t *testing.T, chargingEndpoint string, pub CDRPublisher, res RouteResolver) *grpc.ClientConn {
+	return startSwitchingAll(t, chargingEndpoint, pub, res, nil)
+}
+
+func startSwitchingAll(t *testing.T, chargingEndpoint string, pub CDRPublisher, res RouteResolver, sbc SbcChecker) *grpc.ClientConn {
 	t.Helper()
 	cc, err := grpc.NewClient(chargingEndpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -67,7 +82,14 @@ func startSwitchingWithCDR(t *testing.T, chargingEndpoint string, pub CDRPublish
 
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
-	pb.RegisterSwitchingServer(srv, &switchingServer{reg: NewRegistryWithCDRs(pub), cc: cc})
+	reg := NewRegistryWithCDRs(pub)
+	if res != nil {
+		reg = reg.WithRouting(res)
+	}
+	if sbc != nil {
+		reg = reg.WithSBC(sbc)
+	}
+	pb.RegisterSwitchingServer(srv, &switchingServer{reg: reg, cc: cc})
 	go srv.Serve(lis)
 	t.Cleanup(srv.Stop)
 
@@ -94,9 +116,9 @@ func seed(t *testing.T, account string, balanceMinor int64, prefix, rate string)
 	if _, err := db.Exec(ctx, `TRUNCATE ledger, sessions`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(ctx,
-		`INSERT INTO rates (prefix, rate_per_sec) VALUES ($1, $2::numeric)
-		 ON CONFLICT (prefix) DO UPDATE SET rate_per_sec = $2::numeric`, prefix, rate); err != nil {
+	// Rates live in Catalogue (P1 slice three); seed via its gRPC like the
+	// charging tests do. The stale charging.rates table is a decoy.
+	if _, err := catalogue(t).PutRate(ctx, &cataloguepb.PutRateRequest{Prefix: prefix, RatePerSec: rate}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(ctx,
@@ -105,6 +127,20 @@ func seed(t *testing.T, account string, balanceMinor int64, prefix, rate string)
 		account, balanceMinor); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func catalogue(t *testing.T) cataloguepb.CatalogueClient {
+	t.Helper()
+	addr := os.Getenv("CATALOGUE_ADDR")
+	if addr == "" {
+		addr = "localhost:50053"
+	}
+	cc, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cc.Close() })
+	return cataloguepb.NewCatalogueClient(cc)
 }
 
 func startCall(t *testing.T, client *grpc.ClientConn, account, dest string) *pb.StartCallResponse {
@@ -200,22 +236,11 @@ func TestStopCallReleases(t *testing.T) {
 		t.Fatalf("denied: %+v", resp)
 	}
 	time.Sleep(1500 * time.Millisecond) // let a tick or two run
-	st, err := pb.NewSwitchingClient(client).StopCall(context.Background(),
-		&pb.StopCallRequest{CallId: resp.CallId})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !st.Stopped {
-		t.Fatal("StopCall returned false")
-	}
-	evs := collect(t, client, resp.CallId, 10*time.Second)
-	if len(evs) == 0 || evs[len(evs)-1].Type != pb.CallEvent_RELEASED {
-		t.Fatalf("no release event: %+v", evs)
-	}
+	stopCall(t, client, resp.CallId)
+	waitReleased(t, client, resp.CallId)
 	var released bool
-	err = db.QueryRow(context.Background(),
-		`SELECT released FROM sessions WHERE session_id = $1`, resp.SessionId).Scan(&released)
-	if err != nil {
+	if err := db.QueryRow(context.Background(),
+		`SELECT released FROM sessions WHERE session_id = $1`, resp.SessionId).Scan(&released); err != nil {
 		t.Fatal(err)
 	}
 	if !released {
@@ -233,5 +258,165 @@ func TestDeniedCallNotCreated(t *testing.T) {
 	}
 	if resp.CallId != "" {
 		t.Fatalf("no call should be created, got %q", resp.CallId)
+	}
+}
+
+// routingClientFor connects to the dev routing service for rule seeding and
+// as a real resolver implementation.
+func routingClientFor(t *testing.T) routingpb.RoutingClient {
+	t.Helper()
+	addr := os.Getenv("SWITCHING_ROUTING_ADDR")
+	if addr == "" {
+		addr = "localhost:50057"
+	}
+	cc, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cc.Close() })
+	return routingpb.NewRoutingClient(cc)
+}
+
+// seedLcr installs an LCR candidate (and enables its trunk) via routing gRPC.
+func seedLcr(t *testing.T, rc routingpb.RoutingClient, prefix, trunk string, cost int64) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := rc.PutTrunk(ctx, &routingpb.PutTrunkRequest{TrunkId: trunk, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rc.PutLcrRoute(ctx, &routingpb.PutLcrRouteRequest{Prefix: prefix, TrunkId: trunk, CostPerSec: cost}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRoutedCallAllowed: a cheapest-valid-trunk candidate lets the call through.
+func TestRoutedCallAllowed(t *testing.T) {
+	seed(t, "acc-route", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	seedLcr(t, rc, "3555", "trunk-a", 2)
+	client := startSwitchingFull(t, chargingAddr(), nil, routingClient{rc})
+	resp := startCall(t, client, "acc-route", "35551234567")
+	if !resp.Allowed {
+		t.Fatalf("denied: %+v", resp)
+	}
+}
+
+// TestUnroutedDenied: no dial-plan rule denies with no_route, no call created.
+func TestUnroutedDenied(t *testing.T) {
+	seed(t, "acc-noroute", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	client := startSwitchingFull(t, chargingAddr(), nil, routingClient{rc})
+	resp := startCall(t, client, "acc-noroute", "9988776655")
+	if resp.Allowed || resp.Reason != "no_route" {
+		t.Fatalf("want no_route deny, got %+v", resp)
+	}
+	if resp.CallId != "" {
+		t.Fatalf("no call should be created, got %q", resp.CallId)
+	}
+}
+
+// TestRoutingOutageFailClosed: unreachable Routing denies the call outright.
+func TestRoutingOutageFailClosed(t *testing.T) {
+	seed(t, "acc-routeout", 1000, "3555", "1.000000")
+	dead, err := grpc.NewClient("passthrough:///127.0.0.1:1",
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { dead.Close() })
+	client := startSwitchingFull(t, chargingAddr(), nil, routingClient{routingpb.NewRoutingClient(dead)})
+	resp := startCall(t, client, "acc-routeout", "35551234567")
+	if resp.Allowed || resp.Reason != "routing_unavailable" {
+		t.Fatalf("want routing_unavailable deny, got %+v", resp)
+	}
+}
+
+// fakeSbc is an in-process SbcChecker with a concurrent-call limit.
+type fakeSbc struct {
+	limit  int
+	err    error
+	mu     sync.Mutex
+	active int
+}
+
+func (f *fakeSbc) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (*sbcpb.CheckCallResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.active >= f.limit {
+		return &sbcpb.CheckCallResponse{Allowed: false, Reason: "trunk_limit_exceeded"}, nil
+	}
+	f.active++
+	return &sbcpb.CheckCallResponse{Allowed: true}, nil
+}
+
+func (f *fakeSbc) EndCall(ctx context.Context, req *sbcpb.EndCallRequest) (*sbcpb.EndCallResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.active--
+	return &sbcpb.EndCallResponse{}, nil
+}
+
+// TestSbcLimitEnforced: a second concurrent call on a 1-call trunk is denied
+// through the SBC playbook; ending the first call frees the slot.
+func TestSbcLimitEnforced(t *testing.T) {
+	seed(t, "acc-sbclimit", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	seedLcr(t, rc, "3555", "trunk-sbcl", 2)
+	fsb := &fakeSbc{limit: 1}
+	client := startSwitchingAll(t, chargingAddr(), nil,
+		routingClient{rc}, fsb)
+
+	first := startCall(t, client, "acc-sbclimit", "35551234567")
+	if !first.Allowed {
+		t.Fatalf("first call denied: %+v", first)
+	}
+	second := startCall(t, client, "acc-sbclimit", "35551234567")
+	if second.Allowed || second.Reason != "trunk_limit_exceeded" {
+		t.Fatalf("want trunk_limit_exceeded deny, got %+v", second)
+	}
+	stopCall(t, client, first.CallId)
+	waitReleased(t, client, first.CallId)
+	third := startCall(t, client, "acc-sbclimit", "35551234567")
+	if !third.Allowed {
+		t.Fatalf("after release denied: %+v", third)
+	}
+}
+
+// TestSbcOutageFailClosed: SBC errors deny with sbc_unavailable.
+func TestSbcOutageFailClosed(t *testing.T) {
+	seed(t, "acc-sbcout", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	seedLcr(t, rc, "3555", "trunk-sbco", 2)
+	client := startSwitchingAll(t, chargingAddr(), nil,
+		routingClient{rc}, &fakeSbc{limit: 1, err: errors.New("sbc down")})
+	resp := startCall(t, client, "acc-sbcout", "35551234567")
+	if resp.Allowed || resp.Reason != "sbc_unavailable" {
+		t.Fatalf("want sbc_unavailable deny, got %+v", resp)
+	}
+}
+
+// stopCall stops a call, expecting success.
+func stopCall(t *testing.T, client *grpc.ClientConn, callID string) {
+	t.Helper()
+	st, err := pb.NewSwitchingClient(client).StopCall(context.Background(),
+		&pb.StopCallRequest{CallId: callID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.Stopped {
+		t.Fatal("StopCall returned false")
+	}
+}
+
+// waitReleased blocks until the call streams its terminal event.
+func waitReleased(t *testing.T, client *grpc.ClientConn, callID string) {
+	t.Helper()
+	evs := collect(t, client, callID, 10*time.Second)
+	if len(evs) == 0 || (evs[len(evs)-1].Type != pb.CallEvent_RELEASED &&
+		evs[len(evs)-1].Type != pb.CallEvent_TERMINATED) {
+		t.Fatalf("no terminal event: %+v", evs)
 	}
 }

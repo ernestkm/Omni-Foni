@@ -20,6 +20,8 @@ message StartCallRequest {
   string account_id = 1;
   string destination = 2;
   string cli = 3;
+  // Source address of the call attempt; empty skips the SBC intrusion check.
+  string source_ip = 4;
 }
 
 message StartCallResponse {

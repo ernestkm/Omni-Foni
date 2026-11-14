@@ -6,15 +6,24 @@ replace omnifoni/mediation => ../mediation
 
 replace omnifoni/charging => ../charging
 
+replace omnifoni/catalogue => ../catalogue
+
+replace omnifoni/routing => ../routing
+
+replace omnifoni/sbc => ../sbc
+
 require (
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.12.0
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/twmb/franz-go v1.22.3
 	github.com/twmb/franz-go/pkg/kadm v1.20.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
+	omnifoni/catalogue v0.0.0-00010101000000-000000000000
 	omnifoni/charging v0.0.0-00010101000000-000000000000
 	omnifoni/mediation v0.0.0-00010101000000-000000000000
+	omnifoni/routing v0.0.0-00010101000000-000000000000
+	omnifoni/sbc v0.0.0-00010101000000-000000000000
 )
 
 require (

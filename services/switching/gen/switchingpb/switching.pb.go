@@ -74,10 +74,12 @@ func (CallEvent_Type) EnumDescriptor() ([]byte, []int) {
 }
 
 type StartCallRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AccountId     string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
-	Destination   string                 `protobuf:"bytes,2,opt,name=destination,proto3" json:"destination,omitempty"`
-	Cli           string                 `protobuf:"bytes,3,opt,name=cli,proto3" json:"cli,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	AccountId   string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Destination string                 `protobuf:"bytes,2,opt,name=destination,proto3" json:"destination,omitempty"`
+	Cli         string                 `protobuf:"bytes,3,opt,name=cli,proto3" json:"cli,omitempty"`
+	// Source address of the call attempt; empty skips the SBC intrusion check.
+	SourceIp      string `protobuf:"bytes,4,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -129,6 +131,13 @@ func (x *StartCallRequest) GetDestination() string {
 func (x *StartCallRequest) GetCli() string {
 	if x != nil {
 		return x.Cli
+	}
+	return ""
+}
+
+func (x *StartCallRequest) GetSourceIp() string {
+	if x != nil {
+		return x.SourceIp
 	}
 	return ""
 }
@@ -413,12 +422,13 @@ var File_switching_v1_switching_proto protoreflect.FileDescriptor
 
 const file_switching_v1_switching_proto_rawDesc = "" +
 	"\n" +
-	"\x1cswitching/v1/switching.proto\x12\fswitching.v1\"e\n" +
+	"\x1cswitching/v1/switching.proto\x12\fswitching.v1\"\x82\x01\n" +
 	"\x10StartCallRequest\x12\x1d\n" +
 	"\n" +
 	"account_id\x18\x01 \x01(\tR\taccountId\x12 \n" +
 	"\vdestination\x18\x02 \x01(\tR\vdestination\x12\x10\n" +
-	"\x03cli\x18\x03 \x01(\tR\x03cli\"\x9e\x01\n" +
+	"\x03cli\x18\x03 \x01(\tR\x03cli\x12\x1b\n" +
+	"\tsource_ip\x18\x04 \x01(\tR\bsourceIp\"\x9e\x01\n" +
 	"\x11StartCallResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +

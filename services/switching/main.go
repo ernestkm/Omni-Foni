@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	routingpb "omnifoni/routing/gen/routingpb"
+	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
 )
 
@@ -45,17 +47,42 @@ func main() {
 		os.Exit(1)
 	}
 
+	routingAddr := os.Getenv("SWITCHING_ROUTING_ADDR")
+	if routingAddr == "" {
+		// ponytail: dev default; production resolves the mesh identity
+		routingAddr = "localhost:50057"
+	}
+	rcc, err := grpc.NewClient(routingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Error("routing client", "err", err)
+		os.Exit(1)
+	}
+
+	// SBC is opt-in by env: unset skips the playbook (dev host runs);
+	// compose always sets it, so production is fail-closed.
+	reg := NewRegistryWithCDRs(&kafkaCDRs{topic: "cdrs.raw", prod: prod}).
+		WithRouting(routingClient{routingpb.NewRoutingClient(rcc)})
+	if sbcAddr := os.Getenv("SWITCHING_SBC_ADDR"); sbcAddr != "" {
+		scc, err := grpc.NewClient(sbcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			slog.Error("sbc client", "err", err)
+			os.Exit(1)
+		}
+		reg = reg.WithSBC(sbcClient{sbcpb.NewSbcClient(scc)})
+		slog.Info("sbc wired", "addr", sbcAddr)
+	}
+
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		slog.Error("listen failed", "err", err)
 		os.Exit(1)
 	}
 	srv := grpc.NewServer()
-	pb.RegisterSwitchingServer(srv, &switchingServer{reg: NewRegistryWithCDRs(&kafkaCDRs{topic: "cdrs.raw", prod: prod}), cc: cc})
+	pb.RegisterSwitchingServer(srv, &switchingServer{reg: reg, cc: cc})
 	if os.Getenv("SWITCHING_REFLECTION") == "1" {
 		reflection.Register(srv)
 	}
-	slog.Info("switching up", "addr", addr, "charging", chargingAddr, "kafka", brokers[0])
+	slog.Info("switching up", "addr", addr, "charging", chargingAddr, "routing", routingAddr, "kafka", brokers[0])
 	if err := srv.Serve(lis); err != nil {
 		slog.Error("serve failed", "err", err)
 		os.Exit(1)
