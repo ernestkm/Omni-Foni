@@ -373,6 +373,198 @@ func (x *AccountTotal) GetLineCount() int64 {
 	return 0
 }
 
+type GetPeriodLedgerRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Period        string                 `protobuf:"bytes,1,opt,name=period,proto3" json:"period,omitempty"` // YYYY-MM
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPeriodLedgerRequest) Reset() {
+	*x = GetPeriodLedgerRequest{}
+	mi := &file_billing_v1_billing_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPeriodLedgerRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPeriodLedgerRequest) ProtoMessage() {}
+
+func (x *GetPeriodLedgerRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_billing_v1_billing_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPeriodLedgerRequest.ProtoReflect.Descriptor instead.
+func (*GetPeriodLedgerRequest) Descriptor() ([]byte, []int) {
+	return file_billing_v1_billing_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetPeriodLedgerRequest) GetPeriod() string {
+	if x != nil {
+		return x.Period
+	}
+	return ""
+}
+
+type GetPeriodLedgerResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Period        string                 `protobuf:"bytes,1,opt,name=period,proto3" json:"period,omitempty"`
+	CdrCount      int64                  `protobuf:"varint,2,opt,name=cdr_count,json=cdrCount,proto3" json:"cdr_count,omitempty"`
+	AmountSum     int64                  `protobuf:"varint,3,opt,name=amount_sum,json=amountSum,proto3" json:"amount_sum,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPeriodLedgerResponse) Reset() {
+	*x = GetPeriodLedgerResponse{}
+	mi := &file_billing_v1_billing_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPeriodLedgerResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPeriodLedgerResponse) ProtoMessage() {}
+
+func (x *GetPeriodLedgerResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_billing_v1_billing_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPeriodLedgerResponse.ProtoReflect.Descriptor instead.
+func (*GetPeriodLedgerResponse) Descriptor() ([]byte, []int) {
+	return file_billing_v1_billing_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetPeriodLedgerResponse) GetPeriod() string {
+	if x != nil {
+		return x.Period
+	}
+	return ""
+}
+
+func (x *GetPeriodLedgerResponse) GetCdrCount() int64 {
+	if x != nil {
+		return x.CdrCount
+	}
+	return 0
+}
+
+func (x *GetPeriodLedgerResponse) GetAmountSum() int64 {
+	if x != nil {
+		return x.AmountSum
+	}
+	return 0
+}
+
+type ListAccountsForPeriodRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Period        string                 `protobuf:"bytes,1,opt,name=period,proto3" json:"period,omitempty"` // YYYY-MM
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAccountsForPeriodRequest) Reset() {
+	*x = ListAccountsForPeriodRequest{}
+	mi := &file_billing_v1_billing_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAccountsForPeriodRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAccountsForPeriodRequest) ProtoMessage() {}
+
+func (x *ListAccountsForPeriodRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_billing_v1_billing_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAccountsForPeriodRequest.ProtoReflect.Descriptor instead.
+func (*ListAccountsForPeriodRequest) Descriptor() ([]byte, []int) {
+	return file_billing_v1_billing_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListAccountsForPeriodRequest) GetPeriod() string {
+	if x != nil {
+		return x.Period
+	}
+	return ""
+}
+
+type ListAccountsForPeriodResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountIds    []string               `protobuf:"bytes,1,rep,name=account_ids,json=accountIds,proto3" json:"account_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAccountsForPeriodResponse) Reset() {
+	*x = ListAccountsForPeriodResponse{}
+	mi := &file_billing_v1_billing_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAccountsForPeriodResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAccountsForPeriodResponse) ProtoMessage() {}
+
+func (x *ListAccountsForPeriodResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_billing_v1_billing_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAccountsForPeriodResponse.ProtoReflect.Descriptor instead.
+func (*ListAccountsForPeriodResponse) Descriptor() ([]byte, []int) {
+	return file_billing_v1_billing_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ListAccountsForPeriodResponse) GetAccountIds() []string {
+	if x != nil {
+		return x.AccountIds
+	}
+	return nil
+}
+
 var File_billing_v1_billing_proto protoreflect.FileDescriptor
 
 const file_billing_v1_billing_proto_rawDesc = "" +
@@ -410,11 +602,25 @@ const file_billing_v1_billing_proto_rawDesc = "" +
 	"\vtotal_minor\x18\x02 \x01(\x03R\n" +
 	"totalMinor\x12\x1d\n" +
 	"\n" +
-	"line_count\x18\x03 \x01(\x03R\tlineCount2\xc4\x01\n" +
+	"line_count\x18\x03 \x01(\x03R\tlineCount\"0\n" +
+	"\x16GetPeriodLedgerRequest\x12\x16\n" +
+	"\x06period\x18\x01 \x01(\tR\x06period\"m\n" +
+	"\x17GetPeriodLedgerResponse\x12\x16\n" +
+	"\x06period\x18\x01 \x01(\tR\x06period\x12\x1b\n" +
+	"\tcdr_count\x18\x02 \x01(\x03R\bcdrCount\x12\x1d\n" +
+	"\n" +
+	"amount_sum\x18\x03 \x01(\x03R\tamountSum\"6\n" +
+	"\x1cListAccountsForPeriodRequest\x12\x16\n" +
+	"\x06period\x18\x01 \x01(\tR\x06period\"@\n" +
+	"\x1dListAccountsForPeriodResponse\x12\x1f\n" +
+	"\vaccount_ids\x18\x01 \x03(\tR\n" +
+	"accountIds2\x8e\x03\n" +
 	"\aBilling\x12K\n" +
 	"\n" +
 	"GetInvoice\x12\x1d.billing.v1.GetInvoiceRequest\x1a\x1e.billing.v1.GetInvoiceResponse\x12l\n" +
-	"\x15GetInvoicesByAccounts\x12(.billing.v1.GetInvoicesByAccountsRequest\x1a).billing.v1.GetInvoicesByAccountsResponseB Z\x1eomnifoni/billing/gen/billingpbb\x06proto3"
+	"\x15GetInvoicesByAccounts\x12(.billing.v1.GetInvoicesByAccountsRequest\x1a).billing.v1.GetInvoicesByAccountsResponse\x12Z\n" +
+	"\x0fGetPeriodLedger\x12\".billing.v1.GetPeriodLedgerRequest\x1a#.billing.v1.GetPeriodLedgerResponse\x12l\n" +
+	"\x15ListAccountsForPeriod\x12(.billing.v1.ListAccountsForPeriodRequest\x1a).billing.v1.ListAccountsForPeriodResponseB Z\x1eomnifoni/billing/gen/billingpbb\x06proto3"
 
 var (
 	file_billing_v1_billing_proto_rawDescOnce sync.Once
@@ -428,7 +634,7 @@ func file_billing_v1_billing_proto_rawDescGZIP() []byte {
 	return file_billing_v1_billing_proto_rawDescData
 }
 
-var file_billing_v1_billing_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_billing_v1_billing_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_billing_v1_billing_proto_goTypes = []any{
 	(*GetInvoiceRequest)(nil),             // 0: billing.v1.GetInvoiceRequest
 	(*GetInvoiceResponse)(nil),            // 1: billing.v1.GetInvoiceResponse
@@ -436,16 +642,24 @@ var file_billing_v1_billing_proto_goTypes = []any{
 	(*GetInvoicesByAccountsRequest)(nil),  // 3: billing.v1.GetInvoicesByAccountsRequest
 	(*GetInvoicesByAccountsResponse)(nil), // 4: billing.v1.GetInvoicesByAccountsResponse
 	(*AccountTotal)(nil),                  // 5: billing.v1.AccountTotal
+	(*GetPeriodLedgerRequest)(nil),        // 6: billing.v1.GetPeriodLedgerRequest
+	(*GetPeriodLedgerResponse)(nil),       // 7: billing.v1.GetPeriodLedgerResponse
+	(*ListAccountsForPeriodRequest)(nil),  // 8: billing.v1.ListAccountsForPeriodRequest
+	(*ListAccountsForPeriodResponse)(nil), // 9: billing.v1.ListAccountsForPeriodResponse
 }
 var file_billing_v1_billing_proto_depIdxs = []int32{
 	2, // 0: billing.v1.GetInvoiceResponse.lines:type_name -> billing.v1.InvoiceLine
 	5, // 1: billing.v1.GetInvoicesByAccountsResponse.totals:type_name -> billing.v1.AccountTotal
 	0, // 2: billing.v1.Billing.GetInvoice:input_type -> billing.v1.GetInvoiceRequest
 	3, // 3: billing.v1.Billing.GetInvoicesByAccounts:input_type -> billing.v1.GetInvoicesByAccountsRequest
-	1, // 4: billing.v1.Billing.GetInvoice:output_type -> billing.v1.GetInvoiceResponse
-	4, // 5: billing.v1.Billing.GetInvoicesByAccounts:output_type -> billing.v1.GetInvoicesByAccountsResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
+	6, // 4: billing.v1.Billing.GetPeriodLedger:input_type -> billing.v1.GetPeriodLedgerRequest
+	8, // 5: billing.v1.Billing.ListAccountsForPeriod:input_type -> billing.v1.ListAccountsForPeriodRequest
+	1, // 6: billing.v1.Billing.GetInvoice:output_type -> billing.v1.GetInvoiceResponse
+	4, // 7: billing.v1.Billing.GetInvoicesByAccounts:output_type -> billing.v1.GetInvoicesByAccountsResponse
+	7, // 8: billing.v1.Billing.GetPeriodLedger:output_type -> billing.v1.GetPeriodLedgerResponse
+	9, // 9: billing.v1.Billing.ListAccountsForPeriod:output_type -> billing.v1.ListAccountsForPeriodResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
 	2, // [2:2] is the sub-list for extension extendee
 	0, // [0:2] is the sub-list for field type_name
@@ -462,7 +676,7 @@ func file_billing_v1_billing_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_billing_v1_billing_proto_rawDesc), len(file_billing_v1_billing_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

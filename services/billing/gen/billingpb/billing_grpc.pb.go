@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Billing_GetInvoice_FullMethodName            = "/billing.v1.Billing/GetInvoice"
 	Billing_GetInvoicesByAccounts_FullMethodName = "/billing.v1.Billing/GetInvoicesByAccounts"
+	Billing_GetPeriodLedger_FullMethodName       = "/billing.v1.Billing/GetPeriodLedger"
+	Billing_ListAccountsForPeriod_FullMethodName = "/billing.v1.Billing/ListAccountsForPeriod"
 )
 
 // BillingClient is the client API for Billing service.
@@ -37,6 +39,13 @@ type BillingClient interface {
 	// GetInvoicesByAccounts returns per-account totals for a batch of accounts
 	// and one period (the tenant→accounts join stays in the caller).
 	GetInvoicesByAccounts(ctx context.Context, in *GetInvoicesByAccountsRequest, opts ...grpc.CallOption) (*GetInvoicesByAccountsResponse, error)
+	// GetPeriodLedger returns the rated-CDR ingest ledger for one period: how
+	// many CDRs were billed and their total amount. An unseen period is zeros,
+	// not an error.
+	GetPeriodLedger(ctx context.Context, in *GetPeriodLedgerRequest, opts ...grpc.CallOption) (*GetPeriodLedgerResponse, error)
+	// ListAccountsForPeriod returns the distinct account ids that have invoice
+	// lines in one period.
+	ListAccountsForPeriod(ctx context.Context, in *ListAccountsForPeriodRequest, opts ...grpc.CallOption) (*ListAccountsForPeriodResponse, error)
 }
 
 type billingClient struct {
@@ -67,6 +76,26 @@ func (c *billingClient) GetInvoicesByAccounts(ctx context.Context, in *GetInvoic
 	return out, nil
 }
 
+func (c *billingClient) GetPeriodLedger(ctx context.Context, in *GetPeriodLedgerRequest, opts ...grpc.CallOption) (*GetPeriodLedgerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetPeriodLedgerResponse)
+	err := c.cc.Invoke(ctx, Billing_GetPeriodLedger_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *billingClient) ListAccountsForPeriod(ctx context.Context, in *ListAccountsForPeriodRequest, opts ...grpc.CallOption) (*ListAccountsForPeriodResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAccountsForPeriodResponse)
+	err := c.cc.Invoke(ctx, Billing_ListAccountsForPeriod_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BillingServer is the server API for Billing service.
 // All implementations must embed UnimplementedBillingServer
 // for forward compatibility.
@@ -81,6 +110,13 @@ type BillingServer interface {
 	// GetInvoicesByAccounts returns per-account totals for a batch of accounts
 	// and one period (the tenant→accounts join stays in the caller).
 	GetInvoicesByAccounts(context.Context, *GetInvoicesByAccountsRequest) (*GetInvoicesByAccountsResponse, error)
+	// GetPeriodLedger returns the rated-CDR ingest ledger for one period: how
+	// many CDRs were billed and their total amount. An unseen period is zeros,
+	// not an error.
+	GetPeriodLedger(context.Context, *GetPeriodLedgerRequest) (*GetPeriodLedgerResponse, error)
+	// ListAccountsForPeriod returns the distinct account ids that have invoice
+	// lines in one period.
+	ListAccountsForPeriod(context.Context, *ListAccountsForPeriodRequest) (*ListAccountsForPeriodResponse, error)
 	mustEmbedUnimplementedBillingServer()
 }
 
@@ -96,6 +132,12 @@ func (UnimplementedBillingServer) GetInvoice(context.Context, *GetInvoiceRequest
 }
 func (UnimplementedBillingServer) GetInvoicesByAccounts(context.Context, *GetInvoicesByAccountsRequest) (*GetInvoicesByAccountsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetInvoicesByAccounts not implemented")
+}
+func (UnimplementedBillingServer) GetPeriodLedger(context.Context, *GetPeriodLedgerRequest) (*GetPeriodLedgerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPeriodLedger not implemented")
+}
+func (UnimplementedBillingServer) ListAccountsForPeriod(context.Context, *ListAccountsForPeriodRequest) (*ListAccountsForPeriodResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAccountsForPeriod not implemented")
 }
 func (UnimplementedBillingServer) mustEmbedUnimplementedBillingServer() {}
 func (UnimplementedBillingServer) testEmbeddedByValue()                 {}
@@ -154,6 +196,42 @@ func _Billing_GetInvoicesByAccounts_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Billing_GetPeriodLedger_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPeriodLedgerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BillingServer).GetPeriodLedger(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Billing_GetPeriodLedger_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BillingServer).GetPeriodLedger(ctx, req.(*GetPeriodLedgerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Billing_ListAccountsForPeriod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAccountsForPeriodRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BillingServer).ListAccountsForPeriod(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Billing_ListAccountsForPeriod_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BillingServer).ListAccountsForPeriod(ctx, req.(*ListAccountsForPeriodRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Billing_ServiceDesc is the grpc.ServiceDesc for Billing service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -168,6 +246,14 @@ var Billing_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetInvoicesByAccounts",
 			Handler:    _Billing_GetInvoicesByAccounts_Handler,
+		},
+		{
+			MethodName: "GetPeriodLedger",
+			Handler:    _Billing_GetPeriodLedger_Handler,
+		},
+		{
+			MethodName: "ListAccountsForPeriod",
+			Handler:    _Billing_ListAccountsForPeriod_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

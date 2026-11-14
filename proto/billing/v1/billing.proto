@@ -14,6 +14,13 @@ service Billing {
   // GetInvoicesByAccounts returns per-account totals for a batch of accounts
   // and one period (the tenant→accounts join stays in the caller).
   rpc GetInvoicesByAccounts(GetInvoicesByAccountsRequest) returns (GetInvoicesByAccountsResponse);
+  // GetPeriodLedger returns the rated-CDR ingest ledger for one period: how
+  // many CDRs were billed and their total amount. An unseen period is zeros,
+  // not an error.
+  rpc GetPeriodLedger(GetPeriodLedgerRequest) returns (GetPeriodLedgerResponse);
+  // ListAccountsForPeriod returns the distinct account ids that have invoice
+  // lines in one period.
+  rpc ListAccountsForPeriod(ListAccountsForPeriodRequest) returns (ListAccountsForPeriodResponse);
 }
 
 message GetInvoiceRequest {
@@ -49,4 +56,22 @@ message AccountTotal {
   string account_id = 1;
   int64 total_minor = 2;
   int64 line_count = 3;
+}
+
+message GetPeriodLedgerRequest {
+  string period = 1; // YYYY-MM
+}
+
+message GetPeriodLedgerResponse {
+  string period = 1;
+  int64 cdr_count = 2;
+  int64 amount_sum = 3;
+}
+
+message ListAccountsForPeriodRequest {
+  string period = 1; // YYYY-MM
+}
+
+message ListAccountsForPeriodResponse {
+  repeated string account_ids = 1;
 }
