@@ -63,7 +63,13 @@ func (b *Biller) Handle(ctx context.Context, rec *kgo.Record) error {
 		return err
 	}
 
-	tag, err := b.pool.Exec(ctx,
+	tx, err := b.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after a successful Commit
+
+	tag, err := tx.Exec(ctx,
 		`INSERT INTO invoice_lines (call_id, account_id, period, charged_seconds, amount_minor, rate_per_sec)
 		 VALUES ($1, $2, $3, $4, $5, $6::numeric)
 		 ON CONFLICT (call_id) DO NOTHING`,
@@ -71,8 +77,18 @@ func (b *Biller) Handle(ctx context.Context, rec *kgo.Record) error {
 	if err != nil {
 		return err
 	}
-	_ = tag // 0 rows = replay of an already-billed call
-	return nil
+	if tag.RowsAffected() == 1 { // 0 rows = replay of an already-billed call
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO cdr_period_totals (period, cdr_count, amount_sum)
+			 VALUES ($1, 1, $2)
+			 ON CONFLICT (period) DO UPDATE
+			 SET cdr_count = cdr_period_totals.cdr_count + 1,
+			     amount_sum = cdr_period_totals.amount_sum + EXCLUDED.amount_sum`,
+			periodOf(c), amount); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // rateCost mirrors the OCS money rule: ROUND(delta * rate_per_sec) in integer

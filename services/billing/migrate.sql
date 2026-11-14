@@ -8,3 +8,9 @@ CREATE TABLE IF NOT EXISTS invoice_lines (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS invoice_lines_period_idx ON invoice_lines (account_id, period);
+
+CREATE TABLE IF NOT EXISTS cdr_period_totals (
+    period     TEXT PRIMARY KEY,
+    cdr_count  BIGINT NOT NULL DEFAULT 0,
+    amount_sum BIGINT NOT NULL DEFAULT 0
+);

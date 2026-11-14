@@ -252,3 +252,76 @@ func TestNoRateDeadLetter(t *testing.T) {
 	}
 	t.Fatal("dead letter for bill-norate-1 not observed")
 }
+
+// TestLedgerTracksBilledCDRs: the ingest ledger must count and sum exactly
+// the CDRs that were rated and billed, in the same transaction as the
+// invoice lines.
+func TestLedgerTracksBilledCDRs(t *testing.T) {
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `TRUNCATE invoice_lines, cdr_period_totals`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catPool.Exec(ctx, `TRUNCATE rates`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.PutRate(ctx, &cataloguepb.PutRateRequest{Prefix: "3555", RatePerSec: "0.500000"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 60s * 0.5 = 30; 80s * 0.5 = 40 -> count 2, sum 70
+	publish(t, &mediationpb.CallCdr{CallId: "bill-ledger-1", AccountId: "acc-inv",
+		Destination: "3555999", StartedAtMs: time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC).UnixMilli(),
+		ChargedSeconds: 60, EndReason: "normal"})
+	publish(t, &mediationpb.CallCdr{CallId: "bill-ledger-2", AccountId: "acc-inv",
+		Destination: "3555999", StartedAtMs: time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC).UnixMilli(),
+		ChargedSeconds: 80, EndReason: "normal"})
+	waitLines(t, 2)
+
+	var count, sum int64
+	if err := pool.QueryRow(ctx,
+		`SELECT cdr_count, amount_sum FROM cdr_period_totals WHERE period = '2026-11'`).
+		Scan(&count, &sum); err != nil {
+		t.Fatal(err)
+	}
+	if count != 2 || sum != 70 {
+		t.Fatalf("ledger (count %d, sum %d), want (2, 70)", count, sum)
+	}
+	var lines, invSum int64
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*), SUM(amount_minor) FROM invoice_lines WHERE period = '2026-11'`).
+		Scan(&lines, &invSum); err != nil {
+		t.Fatal(err)
+	}
+	if lines != count || invSum != sum {
+		t.Fatalf("ledger (count %d, sum %d) != invoice_lines (count %d, sum %d)", count, sum, lines, invSum)
+	}
+}
+
+// TestLedgerReplayNoDoubleCount: a replayed CDR must touch neither table.
+func TestLedgerReplayNoDoubleCount(t *testing.T) {
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `TRUNCATE invoice_lines, cdr_period_totals`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catPool.Exec(ctx, `TRUNCATE rates`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cat.PutRate(ctx, &cataloguepb.PutRateRequest{Prefix: "3555", RatePerSec: "1.000000"}); err != nil {
+		t.Fatal(err)
+	}
+
+	c := cdr("bill-ledger-replay") // 60s, rate 1 -> 60 minor
+	publish(t, c)
+	publish(t, c) // at-least-once replay
+	waitLines(t, 1)
+
+	var count, sum int64
+	if err := pool.QueryRow(ctx,
+		`SELECT cdr_count, amount_sum FROM cdr_period_totals WHERE period = '2026-11'`).
+		Scan(&count, &sum); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || sum != 60 {
+		t.Fatalf("ledger (count %d, sum %d), want (1, 60) — replay double-counted", count, sum)
+	}
+}
