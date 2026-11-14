@@ -642,7 +642,8 @@ func validPeriod(p string) error {
 			return fmt.Errorf("period must be YYYY-MM")
 		}
 	}
-	if p[5] < '0' || p[5] > '1' || p[6] < '0' || p[6] > '9' {
+	m := int(p[5]-'0')*10 + int(p[6]-'0')
+	if m < 1 || m > 12 {
 		return fmt.Errorf("period month invalid")
 	}
 	return nil
@@ -949,7 +950,8 @@ func validPeriod(p string) error {
 			return fmt.Errorf("period must be YYYY-MM")
 		}
 	}
-	if p[5] < '0' || p[5] > '1' || p[6] < '0' || p[6] > '9' {
+	m := int(p[5]-'0')*10 + int(p[6]-'0')
+	if m < 1 || m > 12 {
 		return fmt.Errorf("period month invalid")
 	}
 	return nil
