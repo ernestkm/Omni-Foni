@@ -141,7 +141,7 @@ func TestHandlePipeline(t *testing.T) {
 	p := NewProcessor(pool, cl, "cdrs.normalized", "cdrs.rejected")
 	ctx := context.Background()
 
-	valid := &pb.CallCdr{CallId: "c-1", AccountId: "a-1", Destination: "35551234567", EndReason: "normal", ChargedSeconds: 5}
+	valid := &pb.CallCdr{CallId: "c-1", AccountId: "a-1", Destination: "35551234567", EndReason: "normal", ChargedSeconds: 5, TrunkId: "trunk-a"}
 	valid2 := &pb.CallCdr{CallId: "c-2", AccountId: "a-1", Destination: "35551234567", EndReason: "balance_exhausted", ChargedSeconds: 3}
 	recs := []*kgo.Record{
 		cdrRecord(t, "cdrs.raw", valid),
@@ -167,6 +167,9 @@ func TestHandlePipeline(t *testing.T) {
 		var c pb.CallCdr
 		if err := proto.Unmarshal(r.Value, &c); err != nil {
 			t.Fatal(err)
+		}
+		if c.CallId == "c-1" && c.TrunkId != "trunk-a" {
+			t.Fatalf("normalized CDR lost trunk_id: %+v", &c)
 		}
 		if c.CallId != "c-1" && c.CallId != "c-2" {
 			t.Fatalf("unexpected call in normalized: %q", c.CallId)
