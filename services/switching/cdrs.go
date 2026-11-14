@@ -22,6 +22,7 @@ func buildCDR(c *call, endReason string, chargedSeconds int64, endedAt time.Time
 		EndedAtMs:      endedAt.UnixMilli(),
 		ChargedSeconds: chargedSeconds,
 		EndReason:      endReason,
+		TrunkId:        c.trunkID,
 	}
 }
 

@@ -112,3 +112,64 @@ func TestCDREmittedOnStop(t *testing.T) {
 	}
 	t.Fatal("CDR for call never appeared on cdrs.raw")
 }
+
+// TestCDRCarriesTrunk: a call resolved through LCR publishes a CDR whose
+// trunk_id is the trunk ResolveLcr picked (P4 slice one follow-up).
+func TestCDRCarriesTrunk(t *testing.T) {
+	seed(t, "acc-cdr-trunk", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	seedLcr(t, rc, "3555", "trunk-a", 2)
+
+	prod, err := kgo.NewClient(kgo.SeedBrokers(kafkaAddr()))
+	if err != nil {
+		t.Skip("kafka unavailable:", err)
+	}
+	t.Cleanup(prod.Close)
+	ensureTopic(t, prod, "cdrs.raw")
+
+	client := startSwitchingAll(t, chargingAddr(), &kafkaCDRs{topic: "cdrs.raw", prod: prod}, routingClient{rc}, nil)
+
+	resp := startCall(t, client, "acc-cdr-trunk", "35551234567")
+	if !resp.Allowed {
+		t.Fatalf("denied: %+v", resp)
+	}
+	time.Sleep(1500 * time.Millisecond)
+	if _, err := pb.NewSwitchingClient(client).StopCall(context.Background(),
+		&pb.StopCallRequest{CallId: resp.CallId}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(kafkaAddr()),
+		kgo.ConsumerGroup("switching-cdr-trunk-test-"+uuid.New().String()),
+		kgo.ConsumeTopics("cdrs.raw"),
+		kgo.ConsumeStartOffset(kgo.NewOffset().AtStart()),
+		kgo.DisableAutoCommit(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(cl.Close)
+
+	for ctx.Err() == nil {
+		f := cl.PollRecords(ctx, 100)
+		for iter := f.RecordIter(); !iter.Done(); {
+			r := iter.Next()
+			if string(r.Key) != resp.CallId {
+				continue // history from other test runs
+			}
+			var c mediationpb.CallCdr
+			if err := proto.Unmarshal(r.Value, &c); err != nil {
+				t.Fatal(err)
+			}
+			if c.TrunkId != "trunk-a" {
+				t.Fatalf("CDR trunk_id %q, want trunk-a: %+v", c.TrunkId, &c)
+			}
+			cancel()
+			return
+		}
+	}
+	t.Fatal("CDR for call never appeared on cdrs.raw")
+}

@@ -80,6 +80,7 @@ type call struct {
 	stopOnce      sync.Once
 
 	accountID, destination, cli string
+	trunkID                     string
 	start                       time.Time
 
 	mu     sync.Mutex
@@ -168,6 +169,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		accountID:   req.GetAccountId(),
 		destination: req.GetDestination(),
 		cli:         req.GetCli(),
+		trunkID:     trunk,
 		start:       time.Now(),
 	}
 	c.cond = sync.NewCond(&c.mu)
