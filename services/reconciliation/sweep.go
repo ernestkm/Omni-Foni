@@ -39,7 +39,12 @@ func (p *kafkaPublisher) PublishDrift(ctx context.Context, ev *pb.DriftEvent) er
 // warned and published; payment deltas are info logs (accounts-receivable
 // states, not drift).
 func (s *Server) Sweep(ctx context.Context, now time.Time) error {
-	for _, period := range []string{PeriodOf(now), PeriodOf(now.AddDate(0, -1, 0))} {
+	u := now.UTC()
+	// Build the previous month from year/month with day 1: AddDate(0,-1,0)
+	// normalizes short months (2026-03-31 -> 2026-03-03) and would sweep the
+	// current month twice.
+	prev := time.Date(u.Year(), u.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	for _, period := range []string{PeriodOf(now), PeriodOf(prev)} {
 		resp, err := s.reconcilePeriodData(ctx, period)
 		if err != nil {
 			return fmt.Errorf("reconcile %s: %w", period, err)

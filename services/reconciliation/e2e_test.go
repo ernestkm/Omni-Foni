@@ -38,7 +38,12 @@ func paymentsDSN() string {
 	return "postgres://postgres:dev-only@localhost:5432/payments"
 }
 
-func stackBrokers() []string { return []string{"localhost:9092"} }
+func stackBrokers() []string {
+	if s := os.Getenv("RECONCILIATION_KAFKA"); s != "" {
+		return []string{s}
+	}
+	return []string{"localhost:9092"}
+}
 
 // liveStack returns real adapters over the running billing/payments gRPC
 // services, or skips when the stack is down or stale (old images lack the
@@ -53,6 +58,7 @@ func liveStack(t *testing.T) (BillingClient, PaymentsClient) {
 	if err != nil {
 		t.Skipf("payments unreachable: %v", err)
 	}
+	t.Cleanup(func() { bConn.Close(); pConn.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if _, err := billingpb.NewBillingClient(bConn).GetPeriodLedger(ctx, &billingpb.GetPeriodLedgerRequest{Period: "1970-01"}); err != nil {
@@ -129,7 +135,8 @@ func TestReconcilePeriodTriangle(t *testing.T) {
 	seedLedger(t, bpool, period, 3, 140)
 	seedPayment(t, ppool, "e2e-pay-a", "acc-a", 100, time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC))
 
-	srv := NewServer(bc, pc, noopPublisher{})
+	pub := &fakePublisher{}
+	srv := NewServer(bc, pc, pub)
 	resp, err := srv.ReconcilePeriod(ctx, &pb.ReconcilePeriodRequest{Period: period})
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +158,9 @@ func TestReconcilePeriodTriangle(t *testing.T) {
 	// On-demand RPCs must not publish drift even when the ledger matches.
 	if _, err := srv.ReconcileAccount(ctx, &pb.ReconcileAccountRequest{AccountId: "acc-a", Period: period}); err != nil {
 		t.Fatal(err)
+	}
+	if len(pub.events) != 0 {
+		t.Fatalf("RPCs published %d drift events, want 0", len(pub.events))
 	}
 }
 
@@ -190,9 +200,11 @@ func TestSweepPublishesDriftEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Invoices say 1 CDR / 50 minor; the (corrupted) ledger claims 999 CDRs /
-	// 999999 minor — both dimensions drift.
+	// a run-unique amount — both dimensions drift. The unique amount means a
+	// stale record from an earlier run cannot satisfy the assertions below.
+	expectedMinor := int64(1_000_000 + time.Now().UnixNano()%1_000_000)
 	seedLine(t, bpool, "e2e-drift-1", "acc-x", period, 50)
-	seedLedger(t, bpool, period, 999, 999999)
+	seedLedger(t, bpool, period, 999, expectedMinor)
 
 	srv := NewServer(bc, pc, newKafkaPublisher(prod, "reconciliation.drift"))
 	now := time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC)
@@ -218,13 +230,13 @@ func TestSweepPublishesDriftEvent(t *testing.T) {
 		fetches.EachRecord(func(r *kgo.Record) {
 			ev := &pb.DriftEvent{}
 			if proto.Unmarshal(r.Value, ev) == nil && ev.GetPeriod() == period &&
-				ev.GetKind() == KindLedgerAmount {
+				ev.GetKind() == KindLedgerAmount && ev.GetExpectedMinor() == expectedMinor {
 				found = ev
 			}
 		})
 		if found != nil {
-			if found.GetExpectedMinor() != 999999 || found.GetActualMinor() != 50 ||
-				found.GetDeltaMinor() != -999949 || found.GetExpectedCount() != 999 || found.GetActualCount() != 1 ||
+			if found.GetActualMinor() != 50 ||
+				found.GetDeltaMinor() != 50-expectedMinor || found.GetExpectedCount() != 999 || found.GetActualCount() != 1 ||
 				found.GetDetectedAtMs() != now.UnixMilli() {
 				t.Fatalf("drift event fields wrong: %+v", found)
 			}

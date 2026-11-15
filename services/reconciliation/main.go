@@ -59,7 +59,7 @@ func main() {
 
 	if iv := env("RECONCILIATION_SWEEP_INTERVAL", "15m"); iv != "0" {
 		interval, err := time.ParseDuration(iv)
-		if err != nil {
+		if err != nil || interval <= 0 {
 			slog.Error("bad RECONCILIATION_SWEEP_INTERVAL", "value", iv, "err", err)
 			os.Exit(1)
 		}

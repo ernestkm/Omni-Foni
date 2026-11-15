@@ -15,9 +15,11 @@ type fakeBilling struct {
 	counts     map[string]int64
 	accounts   []string
 	err        error
+	periods    []string
 }
 
-func (f *fakeBilling) GetPeriodLedger(context.Context, string) (int64, int64, error) {
+func (f *fakeBilling) GetPeriodLedger(_ context.Context, period string) (int64, int64, error) {
+	f.periods = append(f.periods, period)
 	return f.count, f.sum, f.err
 }
 
@@ -186,5 +188,28 @@ func TestReconcileAccountValidation(t *testing.T) {
 func TestPeriodOf(t *testing.T) {
 	if got := PeriodOf(time.Date(2026, 1, 5, 23, 0, 0, 0, time.UTC)); got != "2026-01" {
 		t.Fatalf("PeriodOf %q, want 2026-01", got)
+	}
+}
+
+// TestSweepPreviousMonthRollover: month-end dates must sweep the real previous
+// month, not normalize back into the current one (AddDate(0,-1,0) bug).
+func TestSweepPreviousMonthRollover(t *testing.T) {
+	cases := []struct {
+		now  time.Time
+		want []string
+	}{
+		{time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC), []string{"2026-03", "2026-02"}},
+		{time.Date(2026, 5, 31, 12, 0, 0, 0, time.UTC), []string{"2026-05", "2026-04"}},
+		{time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), []string{"2026-01", "2025-12"}},
+	}
+	for _, c := range cases {
+		b := &fakeBilling{}
+		s := NewServer(b, &fakePayments{}, noopPublisher{})
+		if err := s.Sweep(context.Background(), c.now); err != nil {
+			t.Fatal(err)
+		}
+		if len(b.periods) != len(c.want) || b.periods[0] != c.want[0] || b.periods[1] != c.want[1] {
+			t.Fatalf("now %s swept %v, want %v", c.now.Format("2006-01-02"), b.periods, c.want)
+		}
 	}
 }
