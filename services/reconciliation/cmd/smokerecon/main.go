@@ -23,6 +23,7 @@ func main() {
 		fmt.Println("FAIL:", err)
 		os.Exit(1)
 	}
+	defer conn.Close()
 	client := pb.NewReconciliationClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
