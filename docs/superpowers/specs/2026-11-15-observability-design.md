@@ -35,9 +35,9 @@ Observability is **fail-open**: an unreachable exporter, a bad endpoint or an `I
 
 | File | Responsibility |
 |---|---|
-| `obs.go` | `Init(ctx, service string) (shutdown func(context.Context) error, err error)`; builds a `TracerProvider` with a batcher and OTLP gRPC exporter. Reads `OTEL_EXPORTER_OTLP_ENDPOINT` (default `jaeger:4317`; empty string = no-op exporter) and `OBS_SAMPLE_RATIO` (default `1.0`, parent-based trace-ID-ratio sampler). Sets the global provider and returns a shutdown that flushes with a bounded timeout. |
+| `obs.go` | `Init(ctx, service string) (shutdown func(context.Context) error, err error)`; builds a `TracerProvider` with a batcher and OTLP gRPC exporter. Reads `OTEL_EXPORTER_OTLP_ENDPOINT` (default `jaeger:4317`; `off` = no-op exporter) and `OBS_SAMPLE_RATIO` (default `1.0`, parent-based trace-ID-ratio sampler). Sets the global provider and returns a shutdown that flushes with a bounded timeout. |
 | `log.go` | `SetupLogging(service string)`: installs a `slog.JSONHandler` on stdout behind a handler that adds `service`, `trace_id`, `span_id` (from `trace.SpanContextFromContext`) and `request_id` (from context), then applies redaction. `Redact(key, value)` masks the denylisted keys; `MaskNumber` keeps a short prefix and the last three digits. |
-| `grpc.go` | `ServerOptions() []grpc.ServerOption` (stats handler + unary interceptor for request-ID extraction/generation and span naming `grpc.<svc>.<Method>`); `ClientOptions() []grpc.DialOption` (stats handler + unary interceptor that propagates `x-request-id`). |
+| `grpc.go` | `ServerOptions() []grpc.ServerOption` (otelgrpc stats handler + unary interceptor for request-ID extraction/generation); `ClientOptions() []grpc.DialOption` (otelgrpc stats handler + unary interceptor that propagates `x-request-id`). Span names are otelgrpc's defaults. |
 | `http.go` | `Middleware(next http.Handler) http.Handler`: starts a server span, reads `x-request-id` or generates a UUID, stores both IDs in the context, echoes the request ID back. |
 | `kafka.go` | `InjectKafka(ctx, *kgo.Record)` / `ExtractKafka(ctx, kgo.Record) context.Context`: W3C `traceparent` in record headers. `ConsumerSpan(ctx, topic, callID)` starts a span with the extracted parent. |
 | `context.go` | `WithRequestID` / `RequestIDFrom` and `NewRequestID` (crypto-random UUIDv4). |
@@ -46,14 +46,14 @@ Observability is **fail-open**: an unreachable exporter, a bad endpoint or an `I
 
 | Location | Span | Attributes |
 |---|---|---|
-| switching `StartCall` / `StopCall` | `switching.start_call`, `switching.stop_call` | `call_id`, `account`, `trunk_id`, `duration_seconds` (stop) |
+| switching `StartCall` / `StopCall` | `switching.start_call`, `switching.stop_call` | `call_id`, `account`, `trunk_id` |
 | SBC `CheckCall` | `sbc.check_call` | `trunk_id`, `deny_reason` when denied |
 | routing `ResolveLcr` | `routing.resolve_lcr` | `destination` (masked), `trunk_id`, `cost_minor` |
-| charging `Authorize` / `Charge` | `charging.authorize`, `charging.charge` | `account`, `call_id`, `delta_seconds`; `cost_minor` on charge |
-| catalogue `GetRate` | `catalogue.get_rate` | `destination` (masked), `rate` |
+| charging `Authorize` / `Charge` | `charging.authorize`, `charging.charge` | `account`, `destination` (masked); `session_id`, `total_seconds` on charge |
+| catalogue `GetRate` | `catalogue.get_rate` | `destination` (masked), `matched_prefix`, `rate_per_sec` |
 | mediation pipeline | `mediation.process` per message | `call_id` |
-| billing batch | `billing.batch` | `count`, `period` |
-| reconciliation sweep | `reconciliation.sweep` per month | `period`, `accounts`, `drifts` |
+| billing `Handle` | `billing.handle` | `call_id`, `account` |
+| reconciliation sweep | `reconciliation.sweep` per month | `period`, `accounts` |
 
 Automatic spans from the interceptors cover every other gRPC/HTTP call; no span is started for Postgres queries in this slice.
 
@@ -107,4 +107,4 @@ Metrics and dashboards, Loki/Grafana/collector, DB query spans, sampling UI, ale
 3. Every service log line is JSON with `service`; lines emitted inside a request carry `trace_id`, `span_id` and `request_id`.
 4. Denylisted PII keys are masked in logs and destination numbers are masked in span attributes.
 5. An unreachable Jaeger does not fail any RPC, test or smoke run.
-6. `make test` and `make smoke` pass with Jaeger up and with the exporter endpoint empty.
+6. `make test` and `make smoke` pass with Jaeger up and with the exporter endpoint set to `off`.
