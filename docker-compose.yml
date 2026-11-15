@@ -192,6 +192,24 @@ services:
       postgres:
         condition: service_healthy
 
+  reconciliation:
+    build:
+      context: ./services
+      dockerfile: reconciliation/Dockerfile
+    environment:
+      BILLING_ADDR: billing:50054
+      PAYMENTS_ADDR: payments:50060
+      RECONCILIATION_KAFKA: kafka:9092
+      RECONCILIATION_ADDR: ":50059"
+      RECONCILIATION_SWEEP_INTERVAL: 15m
+    ports:
+      - "50059:50059"
+    depends_on:
+      billing:
+        condition: service_started
+      payments:
+        condition: service_started
+
 volumes:
   pgdata:
   valkeydata:

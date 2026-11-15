@@ -19,4 +19,12 @@ docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
 docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || fail "kafka"
 
+for s in charging switching mediation billing payments identity routing sbc reconciliation; do
+  st=$(docker inspect --format '{{.State.Status}}' "omni-fon-$s-1" 2>/dev/null || echo missing)
+  [ "$st" = "running" ] || fail "$s not running ($st)"
+  echo "ok: $s running"
+done
+
+(cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
+
 echo "smoke: PASS"
