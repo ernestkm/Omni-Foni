@@ -14,10 +14,6 @@ type DriftPublisher interface {
 	PublishDrift(ctx context.Context, ev *pb.DriftEvent) error
 }
 
-type noopPublisher struct{}
-
-func (noopPublisher) PublishDrift(context.Context, *pb.DriftEvent) error { return nil }
-
 // Server serves the reconciliation gRPC surface.
 type Server struct {
 	pb.UnimplementedReconciliationServer

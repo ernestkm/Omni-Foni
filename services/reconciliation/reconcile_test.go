@@ -56,6 +56,11 @@ func (f *fakePublisher) PublishDrift(_ context.Context, ev *pb.DriftEvent) error
 	return nil
 }
 
+// noopPublisher discards drift events; test-only.
+type noopPublisher struct{}
+
+func (noopPublisher) PublishDrift(context.Context, *pb.DriftEvent) error { return nil }
+
 // TestCompareLedger: matching is ok; any count or amount mismatch is drift.
 func TestCompareLedger(t *testing.T) {
 	ok := CompareLedger("2026-11", 3, 140, 3, 140)

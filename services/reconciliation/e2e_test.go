@@ -45,6 +45,26 @@ func stackBrokers() []string {
 	return []string{"localhost:9092"}
 }
 
+// cleanupPeriods restores the dev DBs to a consistent empty state after a test,
+// so the running sweep and `make smoke` never see drift left by a fixture.
+func cleanupPeriods(t *testing.T) {
+	t.Cleanup(func() {
+		ctx := context.Background()
+		if b, err := pgxpool.New(ctx, billingDSN()); err == nil {
+			if _, err := b.Exec(ctx, `TRUNCATE invoice_lines, cdr_period_totals`); err != nil {
+				t.Logf("cleanup billing: %v", err)
+			}
+			b.Close()
+		}
+		if p, err := pgxpool.New(ctx, paymentsDSN()); err == nil {
+			if _, err := p.Exec(ctx, `TRUNCATE payments`); err != nil {
+				t.Logf("cleanup payments: %v", err)
+			}
+			p.Close()
+		}
+	})
+}
+
 // liveStack returns real adapters over the running billing/payments gRPC
 // services, or skips when the stack is down or stale (old images lack the
 // new RPCs).
@@ -119,6 +139,7 @@ func TestReconcilePeriodTriangle(t *testing.T) {
 	}
 	defer ppool.Close()
 	bc, pc := liveStack(t)
+	cleanupPeriods(t)
 
 	const period = "2026-11"
 	if _, err := bpool.Exec(ctx, `TRUNCATE invoice_lines, cdr_period_totals`); err != nil {
@@ -179,6 +200,7 @@ func TestSweepPublishesDriftEvent(t *testing.T) {
 	}
 	defer ppool.Close()
 	bc, pc := liveStack(t)
+	cleanupPeriods(t)
 
 	prod, err := kgo.NewClient(kgo.SeedBrokers(stackBrokers()...), kgo.AllowAutoTopicCreation())
 	if err != nil {

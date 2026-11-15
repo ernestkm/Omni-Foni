@@ -51,6 +51,20 @@ func (s *Server) Sweep(ctx context.Context, now time.Time) error {
 		}
 		led := resp.GetLedgerVsInvoices()
 		if led.GetStatus() == StatusDrift {
+			// Guard against read skew: reconcilePeriodData reads the ledger and
+			// the invoice aggregate over separate RPCs. While billing is
+			// actively ingesting, a CDR committing between those reads looks
+			// like drift. Re-read the ledger; if it moved, defer to the next
+			// pass instead of publishing a spurious event.
+			lc2, ls2, err := s.billing.GetPeriodLedger(ctx, period)
+			if err != nil {
+				slog.Error("drift recheck failed", "period", period, "err", err)
+				continue
+			}
+			if lc2 != led.GetExpectedCount() || ls2 != led.GetExpectedAmountMinor() {
+				slog.Info("ledger moved during sweep; deferring", "period", period)
+				continue
+			}
 			slog.Warn("reconciliation drift", "period", period,
 				"expected_count", led.GetExpectedCount(), "actual_count", led.GetActualCount(),
 				"expected_minor", led.GetExpectedAmountMinor(), "actual_minor", led.GetActualAmountMinor())
