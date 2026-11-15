@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package reconciliation.v1;
+
+option go_package = "omnifoni/reconciliation/gen/reconciliationpb";
+
+// Reconciliation is a read-only aggregator over Billing and Payments. It
+// proves the money triangle: the rated-CDR ingest ledger matches invoice
+// lines, and recorded payments match invoice totals. It owns no database.
+service Reconciliation {
+  // ReconcileAccount returns both comparisons for one account and period.
+  // Ledger comparison is period-wide; payment comparison is per account.
+  rpc ReconcileAccount(ReconcileAccountRequest) returns (ReconcileAccountResponse);
+  // ReconcilePeriod returns the ledger comparison plus one row per account
+  // found on either side.
+  rpc ReconcilePeriod(ReconcilePeriodRequest) returns (ReconcilePeriodResponse);
+}
+
+message ReconcileAccountRequest {
+  string account_id = 1;
+  string period = 2; // YYYY-MM
+}
+
+message ReconcileAccountResponse {
+  LedgerComparison ledger_vs_invoices = 1;
+  PaymentComparison payments_vs_invoices = 2;
+}
+
+message ReconcilePeriodRequest {
+  string period = 1; // YYYY-MM
+}
+
+message ReconcilePeriodResponse {
+  LedgerComparison ledger_vs_invoices = 1;
+  repeated PaymentComparison accounts = 2;
+}
+
+// LedgerComparison is period-wide: the billing ingest ledger (expected)
+// against SUM/COUNT of invoice_lines (actual).
+message LedgerComparison {
+  string period = 1;
+  int64 expected_count = 2;
+  int64 actual_count = 3;
+  int64 expected_amount_minor = 4;
+  int64 actual_amount_minor = 5;
+  string status = 6; // ok | drift
+}
+
+// PaymentComparison is per account: recorded payments against invoice total.
+// The delta is a business state (accounts receivable), not reconciliation
+// drift; only ledger mismatches are drift.
+message PaymentComparison {
+  string account_id = 1;
+  string period = 2;
+  int64 invoice_total_minor = 3;
+  int64 payments_total_minor = 4;
+  int64 delta_minor = 5; // payments - invoice
+  string status = 6;     // paid | underpaid | overpaid | unpaid | no_activity
+}
+
+// DriftEvent is published to the reconciliation.drift Kafka topic when the
+// sweep finds a ledger mismatch. account_id is empty for ledger drift.
+message DriftEvent {
+  string period = 1;
+  string account_id = 2;
+  string kind = 3; // ledger_count_mismatch | ledger_amount_mismatch
+  int64 expected_minor = 4;
+  int64 actual_minor = 5;
+  int64 delta_minor = 6;
+  int64 expected_count = 7;
+  int64 actual_count = 8;
+  int64 detected_at_ms = 9;
+}
