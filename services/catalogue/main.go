@@ -11,9 +11,17 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	pb "omnifoni/catalogue/gen/cataloguepb"
+	"omnifoni/observability"
 )
 
 func main() {
+	observability.SetupLogging("catalogue")
+	shutdown, err := observability.Init(context.Background(), "catalogue")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	dsn := os.Getenv("CATALOGUE_DSN")
 	if dsn == "" {
 		// ponytail: dev default; production composes the DSN from secrets
@@ -40,7 +48,7 @@ func main() {
 		slog.Error("listen failed", "err", err)
 		os.Exit(1)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(observability.ServerOptions()...)
 	pb.RegisterCatalogueServer(srv, NewServer(pool))
 	if os.Getenv("CATALOGUE_REFLECTION") == "1" {
 		reflection.Register(srv)

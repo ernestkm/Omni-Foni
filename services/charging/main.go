@@ -13,9 +13,17 @@ import (
 
 	cataloguepb "omnifoni/catalogue/gen/cataloguepb"
 	pb "omnifoni/charging/gen/chargingpb"
+	"omnifoni/observability"
 )
 
 func main() {
+	observability.SetupLogging("charging")
+	shutdown, err := observability.Init(context.Background(), "charging")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	dsn := os.Getenv("CHARGING_DSN")
 	if dsn == "" {
 		// ponytail: dev default, production injects the real DSN
@@ -46,7 +54,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	catConn, err := grpc.NewClient(catAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	catConn, err := grpc.NewClient(catAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		slog.Error("catalogue client", "err", err)
 		os.Exit(1)
@@ -57,7 +67,7 @@ func main() {
 		slog.Error("listen failed", "err", err)
 		os.Exit(1)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(observability.ServerOptions()...)
 	pb.RegisterChargingServer(srv, NewServer(pool, cataloguepb.NewCatalogueClient(catConn)))
 	// ponytail: reflection gated by env for dev tooling (grpcurl); disable in prod
 	if os.Getenv("CHARGING_REFLECTION") == "1" {

@@ -7,6 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 )
@@ -40,7 +43,15 @@ func NewSBCServer(pool *pgxpool.Pool) *SBCServer {
 // CheckCall runs the playbook: intrusion block, destination barring, caller
 // id barring, trunk concurrent-call limit. The trunk slot is reserved in the
 // same transaction that enforces the limit, so concurrent starts race safely.
-func (s *SBCServer) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (*sbcpb.CheckCallResponse, error) {
+func (s *SBCServer) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (resp *sbcpb.CheckCallResponse, err error) {
+	ctx, span := otel.Tracer("omnifoni/sbc").Start(ctx, "sbc.check_call",
+		trace.WithAttributes(attribute.String("trunk_id", req.GetTrunkId())))
+	defer func() {
+		if resp != nil && !resp.GetAllowed() {
+			span.SetAttributes(attribute.String("deny_reason", resp.GetReason()))
+		}
+		span.End()
+	}()
 	if req.GetSourceIp() != "" {
 		var fails int
 		if err := s.pool.QueryRow(ctx,

@@ -7,8 +7,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	pb "omnifoni/catalogue/gen/cataloguepb"
+	"omnifoni/observability"
 )
 
 //go:embed migrate.sql
@@ -30,12 +34,22 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 // GetRate resolves the longest-prefix rate for a destination. The empty prefix
 // is a legal catch-all matching every destination.
-func (s *Server) GetRate(ctx context.Context, req *pb.GetRateRequest) (*pb.GetRateResponse, error) {
+func (s *Server) GetRate(ctx context.Context, req *pb.GetRateRequest) (resp *pb.GetRateResponse, err error) {
+	ctx, span := otel.Tracer("omnifoni/catalogue").Start(ctx, "catalogue.get_rate",
+		trace.WithAttributes(attribute.String("destination", observability.Mask(req.GetDestination()))))
+	defer func() {
+		if resp != nil {
+			span.SetAttributes(
+				attribute.String("matched_prefix", resp.GetMatchedPrefix()),
+				attribute.String("rate_per_sec", resp.GetRatePerSec()))
+		}
+		span.End()
+	}()
 	if req.GetDestination() == "" {
 		return &pb.GetRateResponse{Found: false}, nil
 	}
 	var prefix, rate string
-	err := s.pool.QueryRow(ctx,
+	err = s.pool.QueryRow(ctx,
 		`SELECT prefix, rate_per_sec::text FROM rates
 		 WHERE LEFT($1, LENGTH(prefix)) = prefix
 		 ORDER BY LENGTH(prefix) DESC LIMIT 1`,

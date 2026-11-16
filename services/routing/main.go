@@ -18,6 +18,11 @@ import (
 	"google.golang.org/grpc/status"
 
 	routingpb "omnifoni/routing/gen/routingpb"
+	"omnifoni/observability"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 //go:embed migrate.sql
@@ -91,7 +96,17 @@ func (s *RoutingServer) PutLcrRoute(ctx context.Context, req *routingpb.PutLcrRo
 
 // ResolveLcr picks the cheapest enabled candidate trunk for the number,
 // breaking ties on longest prefix then trunk id.
-func (s *RoutingServer) ResolveLcr(ctx context.Context, req *routingpb.ResolveRequest) (*routingpb.ResolveLcrResponse, error) {
+func (s *RoutingServer) ResolveLcr(ctx context.Context, req *routingpb.ResolveRequest) (resp *routingpb.ResolveLcrResponse, err error) {
+	ctx, span := otel.Tracer("omnifoni/routing").Start(ctx, "routing.resolve_lcr",
+		trace.WithAttributes(attribute.String("destination", observability.Mask(req.GetNumber()))))
+	defer func() {
+		if resp != nil {
+			span.SetAttributes(
+				attribute.String("trunk_id", resp.GetTrunkId()),
+				attribute.Int64("cost_per_sec", resp.GetCostPerSec()))
+		}
+		span.End()
+	}()
 	if req.Number == "" {
 		return &routingpb.ResolveLcrResponse{}, nil
 	}
@@ -99,7 +114,7 @@ func (s *RoutingServer) ResolveLcr(ctx context.Context, req *routingpb.ResolveRe
 	// 1000-route dataset a single index scan.
 	var trunk string
 	var cost int64
-	err := s.pool.QueryRow(ctx,
+	err = s.pool.QueryRow(ctx,
 		`SELECT r.trunk_id, r.cost_per_sec
 		 FROM lcr_routes r JOIN trunks t USING (trunk_id)
 		 WHERE r.prefix <= $1 AND $1 LIKE r.prefix || '%' AND t.enabled
@@ -137,6 +152,13 @@ func env(key, def string) string {
 }
 
 func main() {
+	observability.SetupLogging("routing")
+	shutdown, err := observability.Init(context.Background(), "routing")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	dsn := env("ROUTING_DSN", "postgres://postgres:dev-only@postgres:5432/routing")
 	addr := env("ROUTING_ADDR", ":50057")
 	reflectFlag := env("ROUTING_REFLECTION", "") == "1"
@@ -159,7 +181,7 @@ func main() {
 		slog.Error("listen", "err", err)
 		os.Exit(1)
 	}
-	g := grpc.NewServer()
+	g := grpc.NewServer(observability.ServerOptions()...)
 	routingpb.RegisterRoutingServer(g, NewRoutingServer(pool))
 	if reflectFlag {
 		reflection.Register(g)

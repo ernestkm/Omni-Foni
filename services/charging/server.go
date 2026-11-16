@@ -12,6 +12,11 @@ import (
 
 	cataloguepb "omnifoni/catalogue/gen/cataloguepb"
 	pb "omnifoni/charging/gen/chargingpb"
+	"omnifoni/observability"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 //go:embed migrate.sql
@@ -44,11 +49,21 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 
 // Authorize resolves the rate and reserves the maximum affordable call
 // duration. Fail-closed: every internal error denies.
-func (s *Server) Authorize(ctx context.Context, req *pb.AuthorizeRequest) (*pb.AuthorizeResponse, error) {
+func (s *Server) Authorize(ctx context.Context, req *pb.AuthorizeRequest) (resp *pb.AuthorizeResponse, err error) {
+	ctx, span := otel.Tracer("omnifoni/charging").Start(ctx, "charging.authorize",
+		trace.WithAttributes(
+			attribute.String("account", req.GetAccountId()),
+			attribute.String("destination", observability.Mask(req.GetDestination()))))
+	defer func() {
+		if resp != nil && !resp.GetAllow() {
+			span.SetAttributes(attribute.String("deny_reason", resp.GetReason()))
+		}
+		span.End()
+	}()
 	if req.GetAccountId() == "" || req.GetDestination() == "" {
 		return deny(reasonInternalError), nil
 	}
-	resp, err := s.authorizeTx(ctx, req)
+	resp, err = s.authorizeTx(ctx, req)
 	if err != nil {
 		if errors.Is(err, errDeny) {
 			return resp, nil
@@ -62,11 +77,16 @@ func (s *Server) Authorize(ctx context.Context, req *pb.AuthorizeRequest) (*pb.A
 // Charge applies the cumulative total. Retries with the same or smaller total
 // are no-ops (applied=false), so at-least-once callers cannot double-charge.
 // denied=true means insufficient funds: the switch must terminate the call.
-func (s *Server) Charge(ctx context.Context, req *pb.ChargeRequest) (*pb.ChargeResponse, error) {
+func (s *Server) Charge(ctx context.Context, req *pb.ChargeRequest) (resp *pb.ChargeResponse, err error) {
+	ctx, span := otel.Tracer("omnifoni/charging").Start(ctx, "charging.charge",
+		trace.WithAttributes(
+			attribute.String("session_id", req.GetSessionId()),
+			attribute.Int64("total_seconds", req.GetTotalSeconds())))
+	defer span.End()
 	if req.GetSessionId() == "" || req.GetTotalSeconds() < 0 {
 		return chargeErr(), nil
 	}
-	resp, err := s.chargeTx(ctx, req)
+	resp, err = s.chargeTx(ctx, req)
 	if err != nil {
 		slog.Error("charge failed", "session", req.GetSessionId(), "err", err)
 		return chargeErr(), nil

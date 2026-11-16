@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	sbcpb "omnifoni/sbc/gen/sbcpb"
+	"omnifoni/observability"
 )
 
 func env(key, def string) string {
@@ -23,6 +24,13 @@ func env(key, def string) string {
 }
 
 func main() {
+	observability.SetupLogging("sbc")
+	shutdown, err := observability.Init(context.Background(), "sbc")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	dsn := env("SBC_DSN", "postgres://postgres:dev-only@postgres:5432/sbc")
 	addr := env("SBC_ADDR", ":50058")
 	reflectFlag := env("SBC_REFLECTION", "") == "1"
@@ -45,7 +53,7 @@ func main() {
 		slog.Error("listen", "err", err)
 		os.Exit(1)
 	}
-	g := grpc.NewServer()
+	g := grpc.NewServer(observability.ServerOptions()...)
 	sbcpb.RegisterSbcServer(g, NewSBCServer(pool))
 	if reflectFlag {
 		reflection.Register(g)
