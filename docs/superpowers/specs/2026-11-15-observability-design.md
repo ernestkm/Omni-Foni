@@ -13,7 +13,7 @@ Close the P0 acceptance items "every service emits traces" and the §9 standard 
 - **Scope**: OpenTelemetry traces *and* JSON logs with correlation IDs and redaction. Metrics, log backends, Grafana and DB spans are out.
 - **Backend**: Jaeger all-in-one (Apache-2.0) in the dev stack, OTLP-native on 4317, UI on 16686. No collector in this slice; services export directly. A collector can be inserted later without code changes.
 - **Depth**: gRPC/HTTP interceptors on every service plus manual spans on the cross-process hops (Kafka publish/consume, reconciliation sweep) so traces stay connected end to end.
-- **Redaction**: key-based masking in the log handler. Keys matching `phone|msisdn|caller|callee|email|token|password|authorization|secret` are masked (e.g. `+2782***1234`); `tenant_id`, `account_id`, `call_id` and `trunk_id` are kept intact. Destination numbers are masked in span attributes too.
+- **Redaction**: key-based masking in the log handler. Keys matching `phone|msisdn|caller|callee|destination|email|token|password|authorization|secret` are masked (e.g. `+2782***1234`); `tenant_id`, `account_id`, `call_id` and `trunk_id` are kept intact. Destination numbers are masked in span attributes too.
 - **Approach**: one shared Go module `libs/observability`, imported via `replace` by each service (the existing sibling-`replace` pattern), not ten copies.
 
 ## 3. Architecture
@@ -31,15 +31,15 @@ Observability is **fail-open**: an unreachable exporter, a bad endpoint or an `I
 
 ## 4. Components
 
-### 4.1 `libs/observability` (new module)
+### 4.1 `services/observability` (new module)
 
 | File | Responsibility |
 |---|---|
 | `obs.go` | `Init(ctx, service string) (shutdown func(context.Context) error, err error)`; builds a `TracerProvider` with a batcher and OTLP gRPC exporter. Reads `OTEL_EXPORTER_OTLP_ENDPOINT` (default `jaeger:4317`; `off` = no-op exporter) and `OBS_SAMPLE_RATIO` (default `1.0`, parent-based trace-ID-ratio sampler). Sets the global provider and returns a shutdown that flushes with a bounded timeout. |
-| `log.go` | `SetupLogging(service string)`: installs a `slog.JSONHandler` on stdout behind a handler that adds `service`, `trace_id`, `span_id` (from `trace.SpanContextFromContext`) and `request_id` (from context), then applies redaction. `Redact(key, value)` masks the denylisted keys; `MaskNumber` keeps a short prefix and the last three digits. |
+| `log.go` | `SetupLogging(service string)`: installs a `slog.JSONHandler` on stdout behind a handler that adds `service`, `trace_id`, `span_id` (from `trace.SpanContextFromContext`) and `request_id` (from context), then applies redaction. `NewHandler(inner, service)` adds correlation and redacts the denylisted keys; `Mask(v)` keeps a five-character prefix and the last four characters (nine characters or fewer are fully masked). |
 | `grpc.go` | `ServerOptions() []grpc.ServerOption` (otelgrpc stats handler + unary interceptor for request-ID extraction/generation); `ClientOptions() []grpc.DialOption` (otelgrpc stats handler + unary interceptor that propagates `x-request-id`). Span names are otelgrpc's defaults. |
 | `http.go` | `Middleware(next http.Handler) http.Handler`: starts a server span, reads `x-request-id` or generates a UUID, stores both IDs in the context, echoes the request ID back. |
-| `kafka.go` | `InjectKafka(ctx, *kgo.Record)` / `ExtractKafka(ctx, kgo.Record) context.Context`: W3C `traceparent` in record headers. `ConsumerSpan(ctx, topic, callID)` starts a span with the extracted parent. |
+| `kafka.go` | `InjectKafka(ctx, *kgo.Record)` / `ExtractKafka(ctx, *kgo.Record) context.Context`: W3C `traceparent` in record headers. `ConsumerSpan(ctx, name, callID)` starts a span with the extracted parent. |
 | `context.go` | `WithRequestID` / `RequestIDFrom` and `NewRequestID` (crypto-random UUIDv4). |
 
 ### 4.2 Manual spans
