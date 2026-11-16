@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "omnifoni/mediation/gen/mediationpb"
+	"omnifoni/observability"
 )
 
 // Processor turns raw CDR records into normalized ones: decode, validate,
@@ -33,6 +34,9 @@ func (p *Processor) Handle(ctx context.Context, rec *kgo.Record) error {
 	if err := proto.Unmarshal(rec.Value, c); err != nil {
 		return p.reject(ctx, rec, "decode_error", err)
 	}
+	ctx = observability.ExtractKafka(ctx, rec)
+	ctx, span := observability.ConsumerSpan(ctx, "mediation.process", c.GetCallId())
+	defer span.End()
 	if reason := Validate(c); reason != "" {
 		return p.reject(ctx, rec, reason, nil)
 	}
@@ -76,5 +80,6 @@ func (p *Processor) produce(ctx context.Context, topic string, key, value []byte
 	if reason != "" {
 		r.Headers = []kgo.RecordHeader{{Key: "reason", Value: []byte(reason)}}
 	}
+	observability.InjectKafka(ctx, r)
 	return p.prod.ProduceSync(ctx, r).FirstErr()
 }

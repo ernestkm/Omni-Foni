@@ -9,6 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	kgo "github.com/twmb/franz-go/pkg/kgo"
+
+	"omnifoni/observability"
 )
 
 func env(key, def string) string {
@@ -27,6 +29,13 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	observability.SetupLogging("mediation")
+	shutdown, err := observability.Init(ctx, "mediation")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {

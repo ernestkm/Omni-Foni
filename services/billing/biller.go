@@ -13,6 +13,9 @@ import (
 
 	cataloguepb "omnifoni/catalogue/gen/cataloguepb"
 	mediationpb "omnifoni/mediation/gen/mediationpb"
+	"omnifoni/observability"
+
+	"go.opentelemetry.io/otel/attribute"
 )
 
 //go:embed migrate.sql
@@ -46,9 +49,13 @@ func (b *Biller) Handle(ctx context.Context, rec *kgo.Record) error {
 	if err := proto.Unmarshal(rec.Value, c); err != nil {
 		return b.reject(ctx, rec, "decode_error", err)
 	}
+	ctx = observability.ExtractKafka(ctx, rec)
 	if reason := Validate(c); reason != "" {
 		return b.reject(ctx, rec, reason, nil)
 	}
+	ctx, span := observability.ConsumerSpan(ctx, "billing.handle", c.GetCallId())
+	defer span.End()
+	span.SetAttributes(attribute.String("account", c.GetAccountId()))
 
 	rate, err := b.cat.GetRate(ctx, &cataloguepb.GetRateRequest{Destination: c.GetDestination()})
 	if err != nil {
@@ -108,6 +115,7 @@ func (b *Biller) reject(ctx context.Context, rec *kgo.Record, reason string, cau
 	}
 	r := &kgo.Record{Topic: b.topicRejected, Key: rec.Key, Value: rec.Value,
 		Headers: []kgo.RecordHeader{{Key: "reason", Value: []byte(reason)}}}
+	observability.InjectKafka(ctx, r)
 	return b.prod.ProduceSync(ctx, r).FirstErr()
 }
 
