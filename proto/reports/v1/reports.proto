@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package reports.v1;
+
+option go_package = "omnifoni/reports/gen/reportspb";
+
+// Reports answers CDR-level and grouped questions over the ClickHouse CDR
+// store. Money is integer minor units; rate_per_sec is a decimal string.
+service Reports {
+  rpc ListCdrs(ListCdrsRequest) returns (ListCdrsResponse);
+  rpc Summarize(SummarizeRequest) returns (SummarizeResponse);
+}
+
+message CdrFilter {
+  repeated string account_ids = 1;
+  string from = 2;                  // YYYY-MM-DD or RFC3339, inclusive
+  string to = 3;                    // YYYY-MM-DD (whole day) or RFC3339, exclusive
+  string destination_prefix = 4;
+  string trunk_id = 5;
+  string end_reason = 6;
+}
+
+message ListCdrsRequest {
+  CdrFilter filter = 1;
+  int32 limit = 2;                  // default 100, max 1000
+  string cursor = 3;                // opaque; base64url of "<started_at_ms>|<call_id>"
+}
+
+message Cdr {
+  string call_id = 1;
+  string account_id = 2;
+  string destination = 3;
+  string cli = 4;
+  int64 started_at_ms = 5;
+  int64 ended_at_ms = 6;
+  int64 charged_seconds = 7;
+  string end_reason = 8;
+  string trunk_id = 9;
+  string rate_per_sec = 10;
+  int64 amount_minor = 11;
+  bool rate_missing = 12;
+}
+
+message ListCdrsResponse {
+  repeated Cdr cdrs = 1;
+  string next_cursor = 2;
+}
+
+enum GroupBy {
+  GROUP_BY_UNSPECIFIED = 0;
+  DAY = 1;
+  DESTINATION = 2;
+  ACCOUNT = 3;
+  TRUNK = 4;
+}
+
+message SummarizeRequest {
+  CdrFilter filter = 1;
+  GroupBy group_by = 2;
+}
+
+message SummaryRow {
+  string key = 1;
+  int64 calls = 2;
+  int64 seconds = 3;
+  int64 amount_minor = 4;
+}
+
+message SummarizeResponse {
+  repeated SummaryRow rows = 1;
+  SummaryRow totals = 2;
+}
