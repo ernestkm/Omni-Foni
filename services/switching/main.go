@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"os"
@@ -14,9 +15,17 @@ import (
 	routingpb "omnifoni/routing/gen/routingpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
+	"omnifoni/observability"
 )
 
 func main() {
+	observability.SetupLogging("switching")
+	shutdown, err := observability.Init(context.Background(), "switching")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
 	chargingAddr := os.Getenv("SWITCHING_CHARGING_ADDR")
 	if chargingAddr == "" {
 		// ponytail: dev default; production resolves the mesh identity
@@ -41,7 +50,9 @@ func main() {
 	}
 	defer prod.Close()
 
-	cc, err := grpc.NewClient(chargingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.NewClient(chargingAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		slog.Error("charging client", "err", err)
 		os.Exit(1)
@@ -52,7 +63,9 @@ func main() {
 		// ponytail: dev default; production resolves the mesh identity
 		routingAddr = "localhost:50057"
 	}
-	rcc, err := grpc.NewClient(routingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	rcc, err := grpc.NewClient(routingAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		slog.Error("routing client", "err", err)
 		os.Exit(1)
@@ -63,7 +76,9 @@ func main() {
 	reg := NewRegistryWithCDRs(&kafkaCDRs{topic: "cdrs.raw", prod: prod}).
 		WithRouting(routingClient{routingpb.NewRoutingClient(rcc)})
 	if sbcAddr := os.Getenv("SWITCHING_SBC_ADDR"); sbcAddr != "" {
-		scc, err := grpc.NewClient(sbcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		scc, err := grpc.NewClient(sbcAddr, append([]grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		}, observability.ClientOptions()...)...)
 		if err != nil {
 			slog.Error("sbc client", "err", err)
 			os.Exit(1)
@@ -77,7 +92,7 @@ func main() {
 		slog.Error("listen failed", "err", err)
 		os.Exit(1)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(observability.ServerOptions()...)
 	pb.RegisterSwitchingServer(srv, &switchingServer{reg: reg, cc: cc})
 	if os.Getenv("SWITCHING_REFLECTION") == "1" {
 		reflection.Register(srv)

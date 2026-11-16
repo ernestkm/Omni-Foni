@@ -9,6 +9,7 @@ import (
 	kgo "github.com/twmb/franz-go/pkg/kgo"
 
 	mediationpb "omnifoni/mediation/gen/mediationpb"
+	"omnifoni/observability"
 )
 
 // buildCDR derives the final call detail record from a finished call.
@@ -32,11 +33,12 @@ type kafkaCDRs struct {
 	prod  *kgo.Client
 }
 
-func (k *kafkaCDRs) PublishCDR(c *mediationpb.CallCdr) error {
+func (k *kafkaCDRs) PublishCDR(ctx context.Context, c *mediationpb.CallCdr) error {
 	v, err := proto.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return k.prod.ProduceSync(context.Background(),
-		&kgo.Record{Topic: k.topic, Key: []byte(c.GetCallId()), Value: v}).FirstErr()
+	rec := &kgo.Record{Topic: k.topic, Key: []byte(c.GetCallId()), Value: v}
+	observability.InjectKafka(ctx, rec)
+	return k.prod.ProduceSync(ctx, rec).FirstErr()
 }

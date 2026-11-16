@@ -4,6 +4,9 @@ import (
 	"context"
 	"io"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
 	pb "omnifoni/switching/gen/switchingpb"
@@ -21,6 +24,10 @@ func (s *switchingServer) StartCall(ctx context.Context, req *pb.StartCallReques
 }
 
 func (s *switchingServer) StopCall(ctx context.Context, req *pb.StopCallRequest) (*pb.StopCallResponse, error) {
+	ctx, span := otel.Tracer("omnifoni/switching").Start(ctx, "switching.stop_call",
+		trace.WithAttributes(attribute.String("call_id", req.GetCallId())))
+	defer span.End()
+	_ = ctx
 	return &pb.StopCallResponse{Stopped: s.reg.StopCall(req.GetCallId())}, nil
 }
 

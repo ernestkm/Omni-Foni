@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 
 	chargingpb "omnifoni/charging/gen/chargingpb"
@@ -14,6 +17,7 @@ import (
 	routingpb "omnifoni/routing/gen/routingpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
+	"omnifoni/observability"
 )
 
 // routingClient adapts the Routing gRPC client to RouteResolver. The call
@@ -71,7 +75,7 @@ func (s sbcClient) EndCall(ctx context.Context, req *sbcpb.EndCallRequest) (*sbc
 
 // CDRPublisher emits the final call record for a finished call.
 type CDRPublisher interface {
-	PublishCDR(c *mediationpb.CallCdr) error
+	PublishCDR(ctx context.Context, c *mediationpb.CallCdr) error
 }
 
 type call struct {
@@ -82,6 +86,7 @@ type call struct {
 	accountID, destination, cli string
 	trunkID                     string
 	start                       time.Time
+	traceCtx                    context.Context
 
 	mu     sync.Mutex
 	cond   *sync.Cond
@@ -117,6 +122,11 @@ func (r *Registry) WithSBC(s SbcChecker) *Registry {
 // routing/SBC/OCS outages, and denials are all fail-closed: no call is
 // created.
 func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.StartCallRequest) (*pb.StartCallResponse, error) {
+	ctx, span := otel.Tracer("omnifoni/switching").Start(ctx, "switching.start_call",
+		trace.WithAttributes(
+			attribute.String("account", req.GetAccountId()),
+			attribute.String("destination", observability.Mask(req.GetDestination()))))
+	defer span.End()
 	callID := uuid.New().String()
 	var trunk string
 	if r.routing != nil {
@@ -171,6 +181,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		cli:         req.GetCli(),
 		trunkID:     trunk,
 		start:       time.Now(),
+		traceCtx:    trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx)),
 	}
 	c.cond = sync.NewCond(&c.mu)
 	r.mu.Lock()
@@ -183,6 +194,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		releaseSlot()
 	}()
 
+	span.SetAttributes(attribute.String("call_id", callID), attribute.String("trunk_id", trunk))
 	c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_STARTED})
 	go r.runCall(cc, c)
 
@@ -292,7 +304,11 @@ func (r *Registry) publishCDR(c *call, endReason string, total int64) {
 	if r.cdrPub == nil {
 		return // ponytail: nil in tests without Kafka; production always wires one
 	}
-	err := r.cdrPub.PublishCDR(buildCDR(c, endReason, total, time.Now()))
+	ctx := c.traceCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	err := r.cdrPub.PublishCDR(ctx, buildCDR(c, endReason, total, time.Now()))
 	if err != nil {
 		slog.Error("cdr publish failed", "call", c.id, "err", err)
 	}
