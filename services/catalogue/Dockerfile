@@ -1,10 +1,9 @@
 FROM golang:1.27 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /bin/catalogue .
+COPY observability/ ./observability/
+COPY catalogue/ ./catalogue/
+RUN cd catalogue && CGO_ENABLED=0 go build -o /catalogue .
 
 FROM gcr.io/distroless/static
-COPY --from=build /bin/catalogue /catalogue
+COPY --from=build /catalogue /catalogue
 ENTRYPOINT ["/catalogue"]

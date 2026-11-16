@@ -1,5 +1,6 @@
 FROM golang:1.27 AS build
 WORKDIR /src
+COPY observability/ ./observability/
 COPY billing/ ./billing/
 COPY payments/ ./payments/
 COPY reconciliation/ ./reconciliation/

@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-for c in postgres valkey kafka clickhouse; do
+for c in postgres valkey kafka clickhouse jaeger; do
   h=$(docker inspect --format '{{.State.Health.Status}}' "omni-fon-$c-1" 2>/dev/null || echo missing)
   [ "$h" = "healthy" ] || fail "$c not healthy ($h)"
   echo "ok: $c healthy"

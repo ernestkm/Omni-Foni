@@ -1,10 +1,26 @@
 services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:16686/ || exit 1"]
+      interval: 5s
+      retries: 10
+
   catalogue:
-    build: ./services/catalogue
+    build:
+      context: ./services
+      dockerfile: catalogue/Dockerfile
     environment:
       CATALOGUE_DSN: postgres://postgres:dev-only@postgres:5432/catalogue
       CATALOGUE_ADDR: ":50053"
       CATALOGUE_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50053:50053"
     depends_on:
@@ -83,6 +99,8 @@ services:
       CHARGING_ADDR: ":50051"
       CHARGING_REFLECTION: "1"
       CHARGING_CATALOGUE_ADDR: catalogue:50053
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50051:50051"
     depends_on:
@@ -102,6 +120,8 @@ services:
       SWITCHING_KAFKA: kafka:9092
       SWITCHING_ADDR: ":50052"
       SWITCHING_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50052:50052"
     depends_on:
@@ -110,10 +130,14 @@ services:
       - sbc
 
   mediation:
-    build: ./services/mediation
+    build:
+      context: ./services
+      dockerfile: mediation/Dockerfile
     environment:
       MEDIATION_DSN: postgres://postgres:dev-only@postgres:5432/mediation
       MEDIATION_KAFKA: kafka:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     depends_on:
       postgres:
         condition: service_healthy
@@ -130,6 +154,8 @@ services:
       BILLING_CATALOGUE_ADDR: catalogue:50053
       BILLING_ADDR: ":50054"
       BILLING_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50054:50054"
     depends_on:
@@ -141,12 +167,16 @@ services:
         condition: service_started
 
   payments:
-    build: ./services/payments
+    build:
+      context: ./services
+      dockerfile: payments/Dockerfile
     environment:
       PAYMENTS_DSN: postgres://postgres:dev-only@postgres:5432/payments
       PAYMENTS_ADDR: ":50055"
       PAYMENTS_GRPC_ADDR: ":50060"
       PAYMENTS_WEBHOOK_SECRET: dev-only
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50055:50055"
       - "50060:50060"
@@ -155,11 +185,15 @@ services:
         condition: service_healthy
 
   identity:
-    build: ./services/identity
+    build:
+      context: ./services
+      dockerfile: identity/Dockerfile
     environment:
       IDENTITY_DSN: postgres://postgres:dev-only@postgres:5432/identity
       IDENTITY_ADDR: ":50056"
       IDENTITY_BILLING_ADDR: billing:50054
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50056:50056"
     depends_on:
@@ -169,11 +203,15 @@ services:
         condition: service_started
 
   routing:
-    build: ./services/routing
+    build:
+      context: ./services
+      dockerfile: routing/Dockerfile
     environment:
       ROUTING_DSN: postgres://postgres:dev-only@postgres:5432/routing
       ROUTING_ADDR: ":50057"
       ROUTING_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50057:50057"
     depends_on:
@@ -181,11 +219,15 @@ services:
         condition: service_healthy
 
   sbc:
-    build: ./services/sbc
+    build:
+      context: ./services
+      dockerfile: sbc/Dockerfile
     environment:
       SBC_DSN: postgres://postgres:dev-only@postgres:5432/sbc
       SBC_ADDR: ":50058"
       SBC_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50058:50058"
     depends_on:
@@ -202,6 +244,8 @@ services:
       RECONCILIATION_KAFKA: kafka:9092
       RECONCILIATION_ADDR: ":50059"
       RECONCILIATION_SWEEP_INTERVAL: 15m
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
     ports:
       - "50059:50059"
     depends_on:

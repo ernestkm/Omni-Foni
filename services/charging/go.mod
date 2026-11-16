@@ -22,3 +22,5 @@ require (
 )
 
 replace omnifoni/catalogue => ../catalogue
+
+replace omnifoni/observability => ../observability

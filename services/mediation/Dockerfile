@@ -1,10 +1,9 @@
 FROM golang:1.27 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /bin/mediation .
+COPY observability/ ./observability/
+COPY mediation/ ./mediation/
+RUN cd mediation && CGO_ENABLED=0 go build -o /mediation .
 
 FROM gcr.io/distroless/static
-COPY --from=build /bin/mediation /mediation
+COPY --from=build /mediation /mediation
 ENTRYPOINT ["/mediation"]

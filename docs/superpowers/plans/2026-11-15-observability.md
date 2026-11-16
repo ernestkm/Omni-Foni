@@ -690,7 +690,7 @@ git commit -m "feat(observability): gRPC, HTTP and Kafka propagation helpers"
 Insert at the top of the `services:` map in `docker-compose.yml`:
 ```yaml
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:1.62.0
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:

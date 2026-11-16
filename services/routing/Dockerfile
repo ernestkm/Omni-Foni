@@ -1,10 +1,9 @@
 FROM golang:1.27 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /bin/routing .
+COPY observability/ ./observability/
+COPY routing/ ./routing/
+RUN cd routing && CGO_ENABLED=0 go build -o /routing .
 
 FROM gcr.io/distroless/static
-COPY --from=build /bin/routing /routing
+COPY --from=build /routing /routing
 ENTRYPOINT ["/routing"]

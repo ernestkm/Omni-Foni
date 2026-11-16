@@ -1,10 +1,9 @@
 FROM golang:1.27 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /bin/sbc .
+COPY observability/ ./observability/
+COPY sbc/ ./sbc/
+RUN cd sbc && CGO_ENABLED=0 go build -o /sbc .
 
 FROM gcr.io/distroless/static
-COPY --from=build /bin/sbc /sbc
+COPY --from=build /sbc /sbc
 ENTRYPOINT ["/sbc"]

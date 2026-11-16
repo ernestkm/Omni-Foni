@@ -22,3 +22,5 @@ require (
 )
 
 replace omnifoni/billing => ../billing
+
+replace omnifoni/observability => ../observability
