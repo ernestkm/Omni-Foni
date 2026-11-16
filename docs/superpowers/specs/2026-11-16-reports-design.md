@@ -46,7 +46,7 @@ Reports owns the `reports` ClickHouse database and nothing else. It never reads 
 
 ### 4.2 Validation and rating rules
 
-- Invalid (`call_id` or `account_id` empty, `charged_seconds < 0`, `ended_at_ms < started_at_ms`) → log `cdr rejected` with a reason and skip the record (no dead-letter topic in this slice).
+- Invalid (`call_id` or `account_id` empty, `started_at_ms == 0`, `charged_seconds < 0`, `ended_at_ms < started_at_ms`) → log `cdr rejected` with a reason and skip the record (no dead-letter topic in this slice).
 - Catalogue RPC error → return the error so the batch retries. An outage never silently zeroes money.
 - `found=false` → insert with `rate_per_sec=0`, `amount_minor=0`, `rate_missing=true`. The CDR still appears in reports; the gap is visible per row.
 - `found=true` → `amount_minor = RateCost(charged_seconds, rate_per_sec)`; store the rate string exactly as returned.
@@ -142,7 +142,7 @@ Semantics:
 
 - `limit` default 100, maximum 1000; values outside 1..1000 are clamped.
 - Cursor is opaque base64url of `<started_at_ms>|<call_id>`; an unparsable cursor is `InvalidArgument`. The next page selects rows where `(started_at, call_id) < (cursor_ms, cursor_call_id)` under the `started_at DESC, call_id DESC` ordering.
-- `from`/`to` are required; a missing or unparsable bound is `InvalidArgument`. `to=YYYY-MM-DD` means the whole UTC day.
+- `from`/`to` are required; a missing or unparsable bound is `InvalidArgument`. The range is half-open `[from, to)`, so `to=YYYY-MM-DD` includes that whole UTC day.
 - `Summarize` requires a non-`GROUP_BY_UNSPECIFIED` group; rows are ordered by `amount_minor DESC, key ASC`; `totals` is always present (zeros when no rows).
 - `DAY` keys are UTC `YYYY-MM-DD`; `DESTINATION` keys are the full destination (country reporting is a later prefix-grouping slice); empty `trunk_id` groups under `""`.
 
@@ -189,7 +189,7 @@ Response bodies mirror the proto: `{"cdrs":[...],"next_cursor":""}` and `{"rows"
 | `REPORTS_GROUP` | `reports` |
 
 - Compose: new `reports` service (`build: {context: ./services, dockerfile: reports/Dockerfile}`, ports 50061/50062, OTEL env, depends on clickhouse/catalogue/kafka).
-- Dockerfile copies `reports/`, `catalogue/`, `observability/`.
+- Dockerfile copies `reports/`, `catalogue/`, `mediation/` and `observability/` (it decodes `mediation.v1.CallCdr`).
 - `Makefile` `test` gains the reports module; `protoc` gains `reports` to the service list.
 - `make bench-reports` (script under `ops/`) inserts 10M synthetic rows and reports query p95; not part of `make test`.
 
