@@ -27,4 +27,12 @@ done
 
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
 
+# The probe issues billing and payments RPCs through reconciliation, so the
+# trace backend must have spans for all three; otherwise tracing is broken.
+services=$(curl -fsS http://localhost:16686/api/services) || fail "jaeger api"
+for s in reconciliation billing payments; do
+  echo "$services" | grep -q "\"$s\"" || fail "no traces for $s"
+  echo "ok: traces for $s"
+done
+
 echo "smoke: PASS"
