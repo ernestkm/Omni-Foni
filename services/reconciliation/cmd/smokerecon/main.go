@@ -12,13 +12,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"omnifoni/observability"
+
 	pb "omnifoni/reconciliation/gen/reconciliationpb"
 )
 
 func main() {
 	addr := flag.String("addr", "localhost:50059", "reconciliation gRPC address")
 	flag.Parse()
-	conn, err := grpc.NewClient(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(*addr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		fmt.Println("FAIL:", err)
 		os.Exit(1)

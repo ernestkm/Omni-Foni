@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"omnifoni/observability"
 	"google.golang.org/grpc"
 
 	pb "omnifoni/payments/gen/paymentspb"
@@ -33,6 +35,13 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	observability.SetupLogging("payments")
+	shutdown, err := observability.Init(ctx, "payments")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -59,7 +68,7 @@ func main() {
 		slog.Error("grpc listen failed", "err", err)
 		os.Exit(1)
 	}
-	gsrv := grpc.NewServer()
+	gsrv := grpc.NewServer(observability.ServerOptions()...)
 	pb.RegisterPaymentsServer(gsrv, &paymentsServer{pool: pool})
 	go func() {
 		<-ctx.Done()
@@ -73,7 +82,7 @@ func main() {
 	}()
 	slog.Info("payments gRPC up", "addr", grpcAddr)
 
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: observability.Middleware(mux), ReadHeaderTimeout: 5 * time.Second}
 	slog.Info("payments up", "addr", addr)
 	go func() {
 		<-ctx.Done()

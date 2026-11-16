@@ -7,9 +7,13 @@ import (
 	"time"
 
 	kgo "github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
 	pb "omnifoni/reconciliation/gen/reconciliationpb"
+	"omnifoni/observability"
 )
 
 // kafkaPublisher publishes DriftEvents as proto bytes, keyed by account when
@@ -32,7 +36,9 @@ func (p *kafkaPublisher) PublishDrift(ctx context.Context, ev *pb.DriftEvent) er
 	if ev.GetAccountId() != "" {
 		key = ev.GetAccountId()
 	}
-	return p.prod.ProduceSync(ctx, &kgo.Record{Topic: p.topic, Key: []byte(key), Value: b}).FirstErr()
+	r := &kgo.Record{Topic: p.topic, Key: []byte(key), Value: b}
+	observability.InjectKafka(ctx, r)
+	return p.prod.ProduceSync(ctx, r).FirstErr()
 }
 
 // Sweep runs one pass over the current and previous month. Ledger drift is
@@ -45,6 +51,8 @@ func (s *Server) Sweep(ctx context.Context, now time.Time) error {
 	// current month twice.
 	prev := time.Date(u.Year(), u.Month()-1, 1, 0, 0, 0, 0, time.UTC)
 	for _, period := range []string{PeriodOf(now), PeriodOf(prev)} {
+		ctx, span := otel.Tracer("omnifoni/reconciliation").Start(ctx, "reconciliation.sweep",
+			trace.WithAttributes(attribute.String("period", period)))
 		resp, err := s.reconcilePeriodData(ctx, period)
 		if err != nil {
 			return fmt.Errorf("reconcile %s: %w", period, err)
@@ -92,6 +100,8 @@ func (s *Server) Sweep(ctx context.Context, now time.Time) error {
 					"payments_minor", pc.GetPaymentsTotalMinor())
 			}
 		}
+		span.SetAttributes(attribute.Int("accounts", len(resp.GetAccounts())))
+		span.End()
 	}
 	return nil
 }

@@ -16,6 +16,7 @@ import (
 	billingpb "omnifoni/billing/gen/billingpb"
 	paymentspb "omnifoni/payments/gen/paymentspb"
 	pb "omnifoni/reconciliation/gen/reconciliationpb"
+	"omnifoni/observability"
 )
 
 func env(key, def string) string {
@@ -33,12 +34,23 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	bConn, err := grpc.NewClient(billingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	observability.SetupLogging("reconciliation")
+	shutdown, err := observability.Init(ctx, "reconciliation")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
+
+	bConn, err := grpc.NewClient(billingAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		slog.Error("billing client", "err", err)
 		os.Exit(1)
 	}
-	pConn, err := grpc.NewClient(paymentsAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	pConn, err := grpc.NewClient(paymentsAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 	if err != nil {
 		slog.Error("payments client", "err", err)
 		os.Exit(1)
@@ -84,7 +96,7 @@ func main() {
 		slog.Error("listen failed", "err", err)
 		os.Exit(1)
 	}
-	g := grpc.NewServer()
+	g := grpc.NewServer(observability.ServerOptions()...)
 	pb.RegisterReconciliationServer(g, srv)
 	go func() {
 		<-ctx.Done()

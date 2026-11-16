@@ -11,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"omnifoni/observability"
+
 	billingpb "omnifoni/billing/gen/billingpb"
 )
 
@@ -27,6 +29,13 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	observability.SetupLogging("identity")
+	shutdown, err := observability.Init(ctx, "identity")
+	if err != nil {
+		slog.Warn("tracing disabled", "err", err)
+	}
+	defer func() { _ = shutdown(context.Background()) }()
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -60,7 +69,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: observability.Middleware(mux), ReadHeaderTimeout: 5 * time.Second}
 	slog.Info("identity up", "addr", addr)
 	go func() {
 		<-ctx.Done()

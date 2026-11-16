@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"omnifoni/observability"
+
 	billingpb "omnifoni/billing/gen/billingpb"
 )
 
@@ -103,5 +105,7 @@ func (s *CommissionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // DialBilling opens the identity→billing gRPC client used by /commission.
 func DialBilling(addr string) (*grpc.ClientConn, error) {
-	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return grpc.NewClient(addr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
 }
