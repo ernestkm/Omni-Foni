@@ -134,7 +134,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		trunk, err = r.routing.Resolve(ctx, req.GetDestination())
 		switch {
 		case err != nil:
-			slog.Error("routing unreachable, fail-closed", "call", req.GetDestination(), "err", err)
+			slog.ErrorContext(ctx, "routing unreachable, fail-closed", "call", req.GetDestination(), "err", err)
 			return &pb.StartCallResponse{Allowed: false, Reason: "routing_unavailable"}, nil
 		case trunk == "":
 			return &pb.StartCallResponse{Allowed: false, Reason: "no_route"}, nil
@@ -156,7 +156,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		})
 		switch {
 		case err != nil:
-			slog.Error("sbc unreachable, fail-closed", "call", callID, "err", err)
+			slog.ErrorContext(ctx, "sbc unreachable, fail-closed", "call", callID, "err", err)
 			return &pb.StartCallResponse{Allowed: false, Reason: "sbc_unavailable"}, nil
 		case !sres.GetAllowed():
 			return &pb.StartCallResponse{Allowed: false, Reason: sres.GetReason()}, nil
@@ -166,7 +166,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		AccountId: req.GetAccountId(), Destination: req.GetDestination(), Cli: req.GetCli(),
 	})
 	if err != nil {
-		slog.Error("ocs unreachable, fail-closed", "account", req.GetAccountId(), "err", err)
+		slog.ErrorContext(ctx, "ocs unreachable, fail-closed", "account", req.GetAccountId(), "err", err)
 		return &pb.StartCallResponse{Allowed: false, Reason: "ocs_unavailable"}, nil
 	}
 	if !cauth.GetAllow() {
@@ -234,7 +234,7 @@ func (r *Registry) runCall(cc *grpc.ClientConn, c *call) {
 				SessionId: c.sessionID, TotalSeconds: total})
 			switch {
 			case err != nil:
-				slog.Error("ocs charge failed, terminating", "call", c.id, "err", err)
+				slog.ErrorContext(c.logCtx(), "ocs charge failed, terminating", "call", c.id, "err", err)
 				c.emit(&pb.CallEvent{CallId: c.id, Type: pb.CallEvent_TERMINATED,
 					Reason: "ocs_unavailable", ChargedSeconds: total})
 				r.publishCDR(c, "ocs_unavailable", total)
@@ -300,6 +300,13 @@ func (c *call) Stream(send func(*pb.CallEvent) error) error {
 	}
 }
 
+func (c *call) logCtx() context.Context {
+	if c.traceCtx != nil {
+		return c.traceCtx
+	}
+	return context.Background()
+}
+
 func (r *Registry) publishCDR(c *call, endReason string, total int64) {
 	if r.cdrPub == nil {
 		return // ponytail: nil in tests without Kafka; production always wires one
@@ -310,6 +317,6 @@ func (r *Registry) publishCDR(c *call, endReason string, total int64) {
 	}
 	err := r.cdrPub.PublishCDR(ctx, buildCDR(c, endReason, total, time.Now()))
 	if err != nil {
-		slog.Error("cdr publish failed", "call", c.id, "err", err)
+		slog.ErrorContext(ctx, "cdr publish failed", "call", c.id, "err", err)
 	}
 }

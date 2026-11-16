@@ -68,7 +68,7 @@ func (s *Server) Authorize(ctx context.Context, req *pb.AuthorizeRequest) (resp 
 		if errors.Is(err, errDeny) {
 			return resp, nil
 		}
-		slog.Error("authorize failed", "account", req.GetAccountId(), "err", err)
+		slog.ErrorContext(ctx, "authorize failed", "account", req.GetAccountId(), "err", err)
 		return deny(reasonInternalError), nil
 	}
 	return resp, nil
@@ -88,7 +88,7 @@ func (s *Server) Charge(ctx context.Context, req *pb.ChargeRequest) (resp *pb.Ch
 	}
 	resp, err = s.chargeTx(ctx, req)
 	if err != nil {
-		slog.Error("charge failed", "session", req.GetSessionId(), "err", err)
+		slog.ErrorContext(ctx, "charge failed", "session", req.GetSessionId(), "err", err)
 		return chargeErr(), nil
 	}
 	return resp, nil
@@ -99,7 +99,7 @@ func (s *Server) Release(ctx context.Context, req *pb.ReleaseRequest) (*pb.Relea
 		`UPDATE sessions SET released = TRUE WHERE session_id = $1 AND NOT released`,
 		req.GetSessionId())
 	if err != nil {
-		slog.Error("release failed", "session", req.GetSessionId(), "err", err)
+		slog.ErrorContext(ctx, "release failed", "session", req.GetSessionId(), "err", err)
 		return &pb.ReleaseResponse{Released: false}, nil
 	}
 	return &pb.ReleaseResponse{Released: tag.RowsAffected() == 1}, nil
@@ -160,7 +160,7 @@ func (s *Server) authorizeTx(ctx context.Context, req *pb.AuthorizeRequest) (*pb
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	slog.Info("authorized", "session", sessionID, "account", req.GetAccountId(),
+	slog.InfoContext(ctx, "authorized", "session", sessionID, "account", req.GetAccountId(),
 		"max_seconds", maxSeconds)
 	return &pb.AuthorizeResponse{Allow: true, MaxSeconds: maxSeconds, SessionId: sessionID}, nil
 }

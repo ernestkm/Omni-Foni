@@ -54,7 +54,7 @@ func (s *IdentityServer) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	}
 	var n int64
 	if err := s.pool.QueryRow(r.Context(), `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	if n > 0 {
@@ -66,12 +66,12 @@ func (s *IdentityServer) Bootstrap(w http.ResponseWriter, r *http.Request) {
 	if err := s.pool.QueryRow(r.Context(),
 		`INSERT INTO tenants (name) VALUES ($1) RETURNING tenant_id::text`,
 		req.TenantName).Scan(&tenantID); err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	userID, token, err := s.createUser(r.Context(), tenantID, req.Email, req.Password, "admin")
 	if err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{
@@ -105,7 +105,7 @@ func (s *IdentityServer) CreateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "conflict", http.StatusConflict)
 			return
 		}
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"user_id": userID, "session_token": token})
@@ -130,18 +130,18 @@ func (s *IdentityServer) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	token, err := newToken()
 	if err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	if _, err := s.pool.Exec(r.Context(),
 		`INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)`,
 		token, userID, time.Now().Add(sessionTTL)); err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"user_id": userID, "session_token": token})
@@ -157,7 +157,7 @@ func (s *IdentityServer) Me(w http.ResponseWriter, r *http.Request) {
 	if err := s.pool.QueryRow(r.Context(),
 		`SELECT email, role, tenant_id::text FROM users WHERE user_id = $1`,
 		userID).Scan(&email, &role, &tenantID); err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
@@ -204,7 +204,7 @@ func (s *IdentityServer) CreateTenant(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "conflict", http.StatusConflict)
 			return
 		}
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"tenant_id": tenantID})
@@ -243,7 +243,7 @@ func (s *IdentityServer) CreateAccount(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "conflict", http.StatusConflict)
 			return
 		}
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{
@@ -270,7 +270,7 @@ func (s *IdentityServer) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		`SELECT account_id, tenant_id::text FROM accounts WHERE tenant_id = $1::uuid ORDER BY account_id`,
 		scope)
 	if err != nil {
-		s.err500(w, err)
+		s.err500(r.Context(), w, err)
 		return
 	}
 	defer rows.Close()
@@ -282,7 +282,7 @@ func (s *IdentityServer) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var a acct
 		if err := rows.Scan(&a.AccountID, &a.TenantID); err != nil {
-			s.err500(w, err)
+			s.err500(r.Context(), w, err)
 			return
 		}
 		out = append(out, a)
@@ -371,7 +371,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func (s *IdentityServer) err500(w http.ResponseWriter, err error) {
-	slog.Error("identity", "err", err)
+func (s *IdentityServer) err500(ctx context.Context, w http.ResponseWriter, err error) {
+	slog.ErrorContext(ctx, "identity", "err", err)
 	http.Error(w, "internal", http.StatusInternalServerError)
 }

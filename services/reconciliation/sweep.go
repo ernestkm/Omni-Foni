@@ -66,14 +66,14 @@ func (s *Server) Sweep(ctx context.Context, now time.Time) error {
 			// pass instead of publishing a spurious event.
 			lc2, ls2, err := s.billing.GetPeriodLedger(ctx, period)
 			if err != nil {
-				slog.Error("drift recheck failed", "period", period, "err", err)
+				slog.ErrorContext(ctx, "drift recheck failed", "period", period, "err", err)
 				continue
 			}
 			if lc2 != led.GetExpectedCount() || ls2 != led.GetExpectedAmountMinor() {
-				slog.Info("ledger moved during sweep; deferring", "period", period)
+				slog.InfoContext(ctx, "ledger moved during sweep; deferring", "period", period)
 				continue
 			}
-			slog.Warn("reconciliation drift", "period", period,
+			slog.WarnContext(ctx, "reconciliation drift", "period", period,
 				"expected_count", led.GetExpectedCount(), "actual_count", led.GetActualCount(),
 				"expected_minor", led.GetExpectedAmountMinor(), "actual_minor", led.GetActualAmountMinor())
 			for _, kind := range DriftKinds(led) {
@@ -88,14 +88,14 @@ func (s *Server) Sweep(ctx context.Context, now time.Time) error {
 					DetectedAtMs:  now.UnixMilli(),
 				}
 				if err := s.publisher.PublishDrift(ctx, ev); err != nil {
-					slog.Error("drift publish failed", "period", period, "kind", kind, "err", err)
+					slog.ErrorContext(ctx, "drift publish failed", "period", period, "kind", kind, "err", err)
 				}
 			}
 		}
 		for _, pc := range resp.GetAccounts() {
 			st := pc.GetStatus()
 			if st != StatusPaid && st != StatusNoActivity {
-				slog.Info("payment delta", "period", period, "account", pc.GetAccountId(),
+				slog.InfoContext(ctx, "payment delta", "period", period, "account", pc.GetAccountId(),
 					"status", st, "invoice_minor", pc.GetInvoiceTotalMinor(),
 					"payments_minor", pc.GetPaymentsTotalMinor())
 			}

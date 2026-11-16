@@ -45,9 +45,9 @@ func (p *Processor) Handle(ctx context.Context, rec *kgo.Record) error {
 
 func (p *Processor) reject(ctx context.Context, rec *kgo.Record, reason string, cause error) error {
 	if cause != nil {
-		slog.Error("cdr rejected", "reason", reason, "err", cause)
+		slog.ErrorContext(ctx, "cdr rejected", "reason", reason, "err", cause)
 	} else {
-		slog.Error("cdr rejected", "reason", reason)
+		slog.ErrorContext(ctx, "cdr rejected", "reason", reason)
 	}
 	return p.produce(ctx, p.rejected, rec.Key, rec.Value, reason)
 }

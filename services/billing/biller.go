@@ -109,9 +109,9 @@ func (b *Biller) rateCost(ctx context.Context, seconds int64, rate string) (int6
 
 func (b *Biller) reject(ctx context.Context, rec *kgo.Record, reason string, cause error) error {
 	if cause != nil {
-		slog.Error("cdr rejected", "reason", reason, "err", cause)
+		slog.ErrorContext(ctx, "cdr rejected", "reason", reason, "err", cause)
 	} else {
-		slog.Error("cdr rejected", "reason", reason)
+		slog.ErrorContext(ctx, "cdr rejected", "reason", reason)
 	}
 	r := &kgo.Record{Topic: b.topicRejected, Key: rec.Key, Value: rec.Value,
 		Headers: []kgo.RecordHeader{{Key: "reason", Value: []byte(reason)}}}

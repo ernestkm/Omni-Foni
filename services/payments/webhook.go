@@ -96,7 +96,7 @@ func (s *WebhookServer) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := VerifySignature(s.secret, r.Header.Get("Stripe-Signature"), body, time.Now()); err != nil {
-		slog.Warn("webhook rejected", "err", err)
+		slog.WarnContext(r.Context(), "webhook rejected", "err", err)
 		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
@@ -118,12 +118,12 @@ func (s *WebhookServer) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		 ON CONFLICT (event_id) DO NOTHING`,
 		req.ID, req.AccountID, req.Gateway, req.AmountMinor)
 	if err != nil {
-		slog.Error("payment insert", "err", err)
+		slog.ErrorContext(r.Context(), "payment insert", "err", err)
 		http.Error(w, "internal", http.StatusInternalServerError)
 		return
 	}
 	if tag.RowsAffected() == 0 {
-		slog.Info("webhook replay absorbed", "event", req.ID)
+		slog.InfoContext(r.Context(), "webhook replay absorbed", "event", req.ID)
 	}
 	w.WriteHeader(http.StatusOK)
 }

@@ -60,7 +60,7 @@ func (s *CommissionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.id.pool.Query(r.Context(),
 		`SELECT account_id FROM accounts WHERE tenant_id = $1::uuid ORDER BY account_id`, scope)
 	if err != nil {
-		s.id.err500(w, err)
+		s.id.err500(r.Context(), w, err)
 		return
 	}
 	defer rows.Close()
@@ -68,13 +68,13 @@ func (s *CommissionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			s.id.err500(w, err)
+			s.id.err500(r.Context(), w, err)
 			return
 		}
 		accountIDs = append(accountIDs, id)
 	}
 	if err := rows.Err(); err != nil {
-		s.id.err500(w, err)
+		s.id.err500(r.Context(), w, err)
 		return
 	}
 	if len(accountIDs) == 0 {
@@ -88,7 +88,7 @@ func (s *CommissionServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	res, err := s.billing.GetInvoicesByAccounts(ctx,
 		&billingpb.GetInvoicesByAccountsRequest{AccountIds: accountIDs, Period: period})
 	if err != nil {
-		s.id.err500(w, err)
+		s.id.err500(r.Context(), w, err)
 		return
 	}
 	var total int64
