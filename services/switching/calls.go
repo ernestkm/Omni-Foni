@@ -86,6 +86,8 @@ type call struct {
 	accountID, destination, cli string
 	trunkID                     string
 	start                       time.Time
+	maxSeconds                  int64 // OCS authorize cap, immutable
+	chargedSeconds              int64 // updated under mu on every tick
 	traceCtx                    context.Context
 
 	mu     sync.Mutex
@@ -181,6 +183,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		cli:         req.GetCli(),
 		trunkID:     trunk,
 		start:       time.Now(),
+		maxSeconds:  cauth.GetMaxSeconds(),
 		traceCtx:    trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx)),
 	}
 	c.cond = sync.NewCond(&c.mu)
@@ -230,6 +233,9 @@ func (r *Registry) runCall(cc *grpc.ClientConn, c *call) {
 			return
 		case <-ticker.C:
 			total++
+			c.mu.Lock()
+			c.chargedSeconds = total
+			c.mu.Unlock()
 			resp, err := charger.Charge(context.Background(), &chargingpb.ChargeRequest{
 				SessionId: c.sessionID, TotalSeconds: total})
 			switch {

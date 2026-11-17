@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Switching_StartCall_FullMethodName  = "/switching.v1.Switching/StartCall"
-	Switching_StopCall_FullMethodName   = "/switching.v1.Switching/StopCall"
-	Switching_CallEvents_FullMethodName = "/switching.v1.Switching/CallEvents"
+	Switching_StartCall_FullMethodName     = "/switching.v1.Switching/StartCall"
+	Switching_StopCall_FullMethodName      = "/switching.v1.Switching/StopCall"
+	Switching_CallEvents_FullMethodName    = "/switching.v1.Switching/CallEvents"
+	Switching_ListLiveCalls_FullMethodName = "/switching.v1.Switching/ListLiveCalls"
 )
 
 // SwitchingClient is the client API for Switching service.
@@ -38,6 +39,8 @@ type SwitchingClient interface {
 	StopCall(ctx context.Context, in *StopCallRequest, opts ...grpc.CallOption) (*StopCallResponse, error)
 	// Server-streamed lifecycle events for one call, replayed from the start.
 	CallEvents(ctx context.Context, in *CallEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[CallEvent], error)
+	// Snapshots in-flight calls (finished calls kept for replay are excluded).
+	ListLiveCalls(ctx context.Context, in *ListLiveCallsRequest, opts ...grpc.CallOption) (*ListLiveCallsResponse, error)
 }
 
 type switchingClient struct {
@@ -87,6 +90,16 @@ func (c *switchingClient) CallEvents(ctx context.Context, in *CallEventsRequest,
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Switching_CallEventsClient = grpc.ServerStreamingClient[CallEvent]
 
+func (c *switchingClient) ListLiveCalls(ctx context.Context, in *ListLiveCallsRequest, opts ...grpc.CallOption) (*ListLiveCallsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLiveCallsResponse)
+	err := c.cc.Invoke(ctx, Switching_ListLiveCalls_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SwitchingServer is the server API for Switching service.
 // All implementations must embed UnimplementedSwitchingServer
 // for forward compatibility.
@@ -101,6 +114,8 @@ type SwitchingServer interface {
 	StopCall(context.Context, *StopCallRequest) (*StopCallResponse, error)
 	// Server-streamed lifecycle events for one call, replayed from the start.
 	CallEvents(*CallEventsRequest, grpc.ServerStreamingServer[CallEvent]) error
+	// Snapshots in-flight calls (finished calls kept for replay are excluded).
+	ListLiveCalls(context.Context, *ListLiveCallsRequest) (*ListLiveCallsResponse, error)
 	mustEmbedUnimplementedSwitchingServer()
 }
 
@@ -119,6 +134,9 @@ func (UnimplementedSwitchingServer) StopCall(context.Context, *StopCallRequest) 
 }
 func (UnimplementedSwitchingServer) CallEvents(*CallEventsRequest, grpc.ServerStreamingServer[CallEvent]) error {
 	return status.Error(codes.Unimplemented, "method CallEvents not implemented")
+}
+func (UnimplementedSwitchingServer) ListLiveCalls(context.Context, *ListLiveCallsRequest) (*ListLiveCallsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLiveCalls not implemented")
 }
 func (UnimplementedSwitchingServer) mustEmbedUnimplementedSwitchingServer() {}
 func (UnimplementedSwitchingServer) testEmbeddedByValue()                   {}
@@ -188,6 +206,24 @@ func _Switching_CallEvents_Handler(srv interface{}, stream grpc.ServerStream) er
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Switching_CallEventsServer = grpc.ServerStreamingServer[CallEvent]
 
+func _Switching_ListLiveCalls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLiveCallsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SwitchingServer).ListLiveCalls(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Switching_ListLiveCalls_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SwitchingServer).ListLiveCalls(ctx, req.(*ListLiveCallsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Switching_ServiceDesc is the grpc.ServiceDesc for Switching service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -202,6 +238,10 @@ var Switching_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopCall",
 			Handler:    _Switching_StopCall_Handler,
+		},
+		{
+			MethodName: "ListLiveCalls",
+			Handler:    _Switching_ListLiveCalls_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

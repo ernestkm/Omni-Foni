@@ -14,6 +14,8 @@ service Switching {
   rpc StopCall(StopCallRequest) returns (StopCallResponse);
   // Server-streamed lifecycle events for one call, replayed from the start.
   rpc CallEvents(CallEventsRequest) returns (stream CallEvent);
+  // Snapshots in-flight calls (finished calls kept for replay are excluded).
+  rpc ListLiveCalls(ListLiveCallsRequest) returns (ListLiveCallsResponse);
 }
 
 message StartCallRequest {
@@ -56,4 +58,25 @@ message CallEvent {
     TERMINATED = 2;
     RELEASED = 3;
   }
+}
+
+message ListLiveCallsRequest {
+  repeated string account_ids = 1; // empty = all live calls (internal/trusted)
+}
+
+message LiveCall {
+  string call_id = 1;
+  string session_id = 2;
+  string account_id = 3;
+  string destination = 4;
+  string cli = 5;
+  string trunk_id = 6;
+  int64 started_at_ms = 7;
+  int64 elapsed_seconds = 8;
+  int64 max_seconds = 9;
+  int64 charged_seconds = 10;
+}
+
+message ListLiveCallsResponse {
+  repeated LiveCall calls = 1;
 }

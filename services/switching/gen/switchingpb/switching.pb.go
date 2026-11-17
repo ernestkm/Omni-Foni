@@ -418,6 +418,210 @@ func (x *CallEvent) GetChargedSeconds() int64 {
 	return 0
 }
 
+type ListLiveCallsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountIds    []string               `protobuf:"bytes,1,rep,name=account_ids,json=accountIds,proto3" json:"account_ids,omitempty"` // empty = all live calls (internal/trusted)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListLiveCallsRequest) Reset() {
+	*x = ListLiveCallsRequest{}
+	mi := &file_switching_v1_switching_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListLiveCallsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListLiveCallsRequest) ProtoMessage() {}
+
+func (x *ListLiveCallsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_switching_v1_switching_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListLiveCallsRequest.ProtoReflect.Descriptor instead.
+func (*ListLiveCallsRequest) Descriptor() ([]byte, []int) {
+	return file_switching_v1_switching_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListLiveCallsRequest) GetAccountIds() []string {
+	if x != nil {
+		return x.AccountIds
+	}
+	return nil
+}
+
+type LiveCall struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CallId         string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	SessionId      string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	AccountId      string                 `protobuf:"bytes,3,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Destination    string                 `protobuf:"bytes,4,opt,name=destination,proto3" json:"destination,omitempty"`
+	Cli            string                 `protobuf:"bytes,5,opt,name=cli,proto3" json:"cli,omitempty"`
+	TrunkId        string                 `protobuf:"bytes,6,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`
+	StartedAtMs    int64                  `protobuf:"varint,7,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	ElapsedSeconds int64                  `protobuf:"varint,8,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
+	MaxSeconds     int64                  `protobuf:"varint,9,opt,name=max_seconds,json=maxSeconds,proto3" json:"max_seconds,omitempty"`
+	ChargedSeconds int64                  `protobuf:"varint,10,opt,name=charged_seconds,json=chargedSeconds,proto3" json:"charged_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LiveCall) Reset() {
+	*x = LiveCall{}
+	mi := &file_switching_v1_switching_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveCall) ProtoMessage() {}
+
+func (x *LiveCall) ProtoReflect() protoreflect.Message {
+	mi := &file_switching_v1_switching_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveCall.ProtoReflect.Descriptor instead.
+func (*LiveCall) Descriptor() ([]byte, []int) {
+	return file_switching_v1_switching_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *LiveCall) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetDestination() string {
+	if x != nil {
+		return x.Destination
+	}
+	return ""
+}
+
+func (x *LiveCall) GetCli() string {
+	if x != nil {
+		return x.Cli
+	}
+	return ""
+}
+
+func (x *LiveCall) GetTrunkId() string {
+	if x != nil {
+		return x.TrunkId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *LiveCall) GetElapsedSeconds() int64 {
+	if x != nil {
+		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *LiveCall) GetMaxSeconds() int64 {
+	if x != nil {
+		return x.MaxSeconds
+	}
+	return 0
+}
+
+func (x *LiveCall) GetChargedSeconds() int64 {
+	if x != nil {
+		return x.ChargedSeconds
+	}
+	return 0
+}
+
+type ListLiveCallsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Calls         []*LiveCall            `protobuf:"bytes,1,rep,name=calls,proto3" json:"calls,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListLiveCallsResponse) Reset() {
+	*x = ListLiveCallsResponse{}
+	mi := &file_switching_v1_switching_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListLiveCallsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListLiveCallsResponse) ProtoMessage() {}
+
+func (x *ListLiveCallsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_switching_v1_switching_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListLiveCallsResponse.ProtoReflect.Descriptor instead.
+func (*ListLiveCallsResponse) Descriptor() ([]byte, []int) {
+	return file_switching_v1_switching_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListLiveCallsResponse) GetCalls() []*LiveCall {
+	if x != nil {
+		return x.Calls
+	}
+	return nil
+}
+
 var File_switching_v1_switching_proto protoreflect.FileDescriptor
 
 const file_switching_v1_switching_proto_rawDesc = "" +
@@ -453,12 +657,33 @@ const file_switching_v1_switching_proto_rawDesc = "" +
 	"\aSTARTED\x10\x01\x12\x0e\n" +
 	"\n" +
 	"TERMINATED\x10\x02\x12\f\n" +
-	"\bRELEASED\x10\x032\xee\x01\n" +
+	"\bRELEASED\x10\x03\"7\n" +
+	"\x14ListLiveCallsRequest\x12\x1f\n" +
+	"\vaccount_ids\x18\x01 \x03(\tR\n" +
+	"accountIds\"\xc7\x02\n" +
+	"\bLiveCall\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x03 \x01(\tR\taccountId\x12 \n" +
+	"\vdestination\x18\x04 \x01(\tR\vdestination\x12\x10\n" +
+	"\x03cli\x18\x05 \x01(\tR\x03cli\x12\x19\n" +
+	"\btrunk_id\x18\x06 \x01(\tR\atrunkId\x12\"\n" +
+	"\rstarted_at_ms\x18\a \x01(\x03R\vstartedAtMs\x12'\n" +
+	"\x0felapsed_seconds\x18\b \x01(\x03R\x0eelapsedSeconds\x12\x1f\n" +
+	"\vmax_seconds\x18\t \x01(\x03R\n" +
+	"maxSeconds\x12'\n" +
+	"\x0fcharged_seconds\x18\n" +
+	" \x01(\x03R\x0echargedSeconds\"E\n" +
+	"\x15ListLiveCallsResponse\x12,\n" +
+	"\x05calls\x18\x01 \x03(\v2\x16.switching.v1.LiveCallR\x05calls2\xc8\x02\n" +
 	"\tSwitching\x12L\n" +
 	"\tStartCall\x12\x1e.switching.v1.StartCallRequest\x1a\x1f.switching.v1.StartCallResponse\x12I\n" +
 	"\bStopCall\x12\x1d.switching.v1.StopCallRequest\x1a\x1e.switching.v1.StopCallResponse\x12H\n" +
 	"\n" +
-	"CallEvents\x12\x1f.switching.v1.CallEventsRequest\x1a\x17.switching.v1.CallEvent0\x01B$Z\"omnifoni/switching/gen/switchingpbb\x06proto3"
+	"CallEvents\x12\x1f.switching.v1.CallEventsRequest\x1a\x17.switching.v1.CallEvent0\x01\x12X\n" +
+	"\rListLiveCalls\x12\".switching.v1.ListLiveCallsRequest\x1a#.switching.v1.ListLiveCallsResponseB$Z\"omnifoni/switching/gen/switchingpbb\x06proto3"
 
 var (
 	file_switching_v1_switching_proto_rawDescOnce sync.Once
@@ -473,29 +698,35 @@ func file_switching_v1_switching_proto_rawDescGZIP() []byte {
 }
 
 var file_switching_v1_switching_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_switching_v1_switching_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_switching_v1_switching_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_switching_v1_switching_proto_goTypes = []any{
-	(CallEvent_Type)(0),       // 0: switching.v1.CallEvent.Type
-	(*StartCallRequest)(nil),  // 1: switching.v1.StartCallRequest
-	(*StartCallResponse)(nil), // 2: switching.v1.StartCallResponse
-	(*StopCallRequest)(nil),   // 3: switching.v1.StopCallRequest
-	(*StopCallResponse)(nil),  // 4: switching.v1.StopCallResponse
-	(*CallEventsRequest)(nil), // 5: switching.v1.CallEventsRequest
-	(*CallEvent)(nil),         // 6: switching.v1.CallEvent
+	(CallEvent_Type)(0),           // 0: switching.v1.CallEvent.Type
+	(*StartCallRequest)(nil),      // 1: switching.v1.StartCallRequest
+	(*StartCallResponse)(nil),     // 2: switching.v1.StartCallResponse
+	(*StopCallRequest)(nil),       // 3: switching.v1.StopCallRequest
+	(*StopCallResponse)(nil),      // 4: switching.v1.StopCallResponse
+	(*CallEventsRequest)(nil),     // 5: switching.v1.CallEventsRequest
+	(*CallEvent)(nil),             // 6: switching.v1.CallEvent
+	(*ListLiveCallsRequest)(nil),  // 7: switching.v1.ListLiveCallsRequest
+	(*LiveCall)(nil),              // 8: switching.v1.LiveCall
+	(*ListLiveCallsResponse)(nil), // 9: switching.v1.ListLiveCallsResponse
 }
 var file_switching_v1_switching_proto_depIdxs = []int32{
 	0, // 0: switching.v1.CallEvent.type:type_name -> switching.v1.CallEvent.Type
-	1, // 1: switching.v1.Switching.StartCall:input_type -> switching.v1.StartCallRequest
-	3, // 2: switching.v1.Switching.StopCall:input_type -> switching.v1.StopCallRequest
-	5, // 3: switching.v1.Switching.CallEvents:input_type -> switching.v1.CallEventsRequest
-	2, // 4: switching.v1.Switching.StartCall:output_type -> switching.v1.StartCallResponse
-	4, // 5: switching.v1.Switching.StopCall:output_type -> switching.v1.StopCallResponse
-	6, // 6: switching.v1.Switching.CallEvents:output_type -> switching.v1.CallEvent
-	4, // [4:7] is the sub-list for method output_type
-	1, // [1:4] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	8, // 1: switching.v1.ListLiveCallsResponse.calls:type_name -> switching.v1.LiveCall
+	1, // 2: switching.v1.Switching.StartCall:input_type -> switching.v1.StartCallRequest
+	3, // 3: switching.v1.Switching.StopCall:input_type -> switching.v1.StopCallRequest
+	5, // 4: switching.v1.Switching.CallEvents:input_type -> switching.v1.CallEventsRequest
+	7, // 5: switching.v1.Switching.ListLiveCalls:input_type -> switching.v1.ListLiveCallsRequest
+	2, // 6: switching.v1.Switching.StartCall:output_type -> switching.v1.StartCallResponse
+	4, // 7: switching.v1.Switching.StopCall:output_type -> switching.v1.StopCallResponse
+	6, // 8: switching.v1.Switching.CallEvents:output_type -> switching.v1.CallEvent
+	9, // 9: switching.v1.Switching.ListLiveCalls:output_type -> switching.v1.ListLiveCallsResponse
+	6, // [6:10] is the sub-list for method output_type
+	2, // [2:6] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_switching_v1_switching_proto_init() }
@@ -509,7 +740,7 @@ func file_switching_v1_switching_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_switching_v1_switching_proto_rawDesc), len(file_switching_v1_switching_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

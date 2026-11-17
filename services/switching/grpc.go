@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"io"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -41,4 +42,28 @@ func (s *switchingServer) CallEvents(req *pb.CallEventsRequest, stream pb.Switch
 	return c.Stream(func(ev *pb.CallEvent) error {
 		return stream.Send(ev)
 	})
+}
+
+func (s *switchingServer) ListLiveCalls(ctx context.Context, req *pb.ListLiveCallsRequest) (*pb.ListLiveCallsResponse, error) {
+	ctx, span := otel.Tracer("omnifoni/switching").Start(ctx, "switching.list_live_calls",
+		trace.WithAttributes(attribute.Int("account_ids", len(req.GetAccountIds()))))
+	defer span.End()
+	_ = ctx
+
+	snaps := s.reg.LiveCalls(req.GetAccountIds())
+	resp := &pb.ListLiveCallsResponse{Calls: make([]*pb.LiveCall, 0, len(snaps))}
+	now := time.Now()
+	for _, c := range snaps {
+		elapsed := int64(now.Sub(c.StartedAt).Seconds())
+		if elapsed < 0 {
+			elapsed = 0
+		}
+		resp.Calls = append(resp.Calls, &pb.LiveCall{
+			CallId: c.CallID, SessionId: c.SessionID, AccountId: c.AccountID,
+			Destination: c.Destination, Cli: c.CLI, TrunkId: c.TrunkID,
+			StartedAtMs: c.StartedAt.UnixMilli(), ElapsedSeconds: elapsed,
+			MaxSeconds: c.MaxSeconds, ChargedSeconds: c.ChargedSeconds,
+		})
+	}
+	return resp, nil
 }
