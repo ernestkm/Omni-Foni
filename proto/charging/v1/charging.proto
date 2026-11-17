@@ -14,6 +14,11 @@ service Charging {
   rpc Charge(ChargeRequest) returns (ChargeResponse);
   // End of call; releases the reservation.
   rpc Release(ReleaseRequest) returns (ReleaseResponse);
+  // ListCharges returns one row per OCS session (call) with the summed ledger
+  // amount, the latest balance and the last charge time. Read-only report path.
+  rpc ListCharges(ListChargesRequest) returns (ListChargesResponse);
+  // ListLowBalance returns accounts with balance <= threshold_minor.
+  rpc ListLowBalance(ListLowBalanceRequest) returns (ListLowBalanceResponse);
 }
 
 message AuthorizeRequest {
@@ -47,4 +52,46 @@ message ReleaseRequest {
 
 message ReleaseResponse {
   bool released = 1;
+}
+
+message ListChargesRequest {
+  repeated string account_ids = 1; // empty = all accounts
+  int64 from_ms = 2;               // inclusive, on the session's last charge
+  int64 to_ms = 3;                 // exclusive
+  int32 limit = 4;                 // default 100, clamped 1..1000
+  string cursor = 5;               // base64url of "<last_charged_at_ms>|<session_id>"
+}
+
+message Charge {
+  string session_id = 1;
+  string account_id = 2;
+  int64 charged_seconds = 3;
+  int64 amount_minor = 4;    // sum of ledger deltas, negative
+  int64 balance_after = 5;   // balance after the latest ledger row
+  int64 last_charged_at_ms = 6;
+}
+
+message ListChargesResponse {
+  repeated Charge charges = 1;
+  string next_cursor = 2;
+}
+
+message ListLowBalanceRequest {
+  repeated string account_ids = 1; // empty = all accounts
+  int64 threshold_minor = 2;       // balance <= threshold
+  int32 limit = 3;                 // default 100, clamped 1..1000
+  string cursor = 4;               // base64url of "<balance>|<account_id>"
+}
+
+message BalanceRow {
+  string account_id = 1;
+  string kind = 2;
+  int64 balance = 3;
+  int64 credit_limit = 4;
+  string currency = 5;
+}
+
+message ListLowBalanceResponse {
+  repeated BalanceRow accounts = 1;
+  string next_cursor = 2;
 }

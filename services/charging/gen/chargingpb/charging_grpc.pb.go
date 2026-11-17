@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Charging_Authorize_FullMethodName = "/charging.v1.Charging/Authorize"
-	Charging_Charge_FullMethodName    = "/charging.v1.Charging/Charge"
-	Charging_Release_FullMethodName   = "/charging.v1.Charging/Release"
+	Charging_Authorize_FullMethodName      = "/charging.v1.Charging/Authorize"
+	Charging_Charge_FullMethodName         = "/charging.v1.Charging/Charge"
+	Charging_Release_FullMethodName        = "/charging.v1.Charging/Release"
+	Charging_ListCharges_FullMethodName    = "/charging.v1.Charging/ListCharges"
+	Charging_ListLowBalance_FullMethodName = "/charging.v1.Charging/ListLowBalance"
 )
 
 // ChargingClient is the client API for Charging service.
@@ -38,6 +40,11 @@ type ChargingClient interface {
 	Charge(ctx context.Context, in *ChargeRequest, opts ...grpc.CallOption) (*ChargeResponse, error)
 	// End of call; releases the reservation.
 	Release(ctx context.Context, in *ReleaseRequest, opts ...grpc.CallOption) (*ReleaseResponse, error)
+	// ListCharges returns one row per OCS session (call) with the summed ledger
+	// amount, the latest balance and the last charge time. Read-only report path.
+	ListCharges(ctx context.Context, in *ListChargesRequest, opts ...grpc.CallOption) (*ListChargesResponse, error)
+	// ListLowBalance returns accounts with balance <= threshold_minor.
+	ListLowBalance(ctx context.Context, in *ListLowBalanceRequest, opts ...grpc.CallOption) (*ListLowBalanceResponse, error)
 }
 
 type chargingClient struct {
@@ -78,6 +85,26 @@ func (c *chargingClient) Release(ctx context.Context, in *ReleaseRequest, opts .
 	return out, nil
 }
 
+func (c *chargingClient) ListCharges(ctx context.Context, in *ListChargesRequest, opts ...grpc.CallOption) (*ListChargesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListChargesResponse)
+	err := c.cc.Invoke(ctx, Charging_ListCharges_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *chargingClient) ListLowBalance(ctx context.Context, in *ListLowBalanceRequest, opts ...grpc.CallOption) (*ListLowBalanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListLowBalanceResponse)
+	err := c.cc.Invoke(ctx, Charging_ListLowBalance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ChargingServer is the server API for Charging service.
 // All implementations must embed UnimplementedChargingServer
 // for forward compatibility.
@@ -92,6 +119,11 @@ type ChargingServer interface {
 	Charge(context.Context, *ChargeRequest) (*ChargeResponse, error)
 	// End of call; releases the reservation.
 	Release(context.Context, *ReleaseRequest) (*ReleaseResponse, error)
+	// ListCharges returns one row per OCS session (call) with the summed ledger
+	// amount, the latest balance and the last charge time. Read-only report path.
+	ListCharges(context.Context, *ListChargesRequest) (*ListChargesResponse, error)
+	// ListLowBalance returns accounts with balance <= threshold_minor.
+	ListLowBalance(context.Context, *ListLowBalanceRequest) (*ListLowBalanceResponse, error)
 	mustEmbedUnimplementedChargingServer()
 }
 
@@ -110,6 +142,12 @@ func (UnimplementedChargingServer) Charge(context.Context, *ChargeRequest) (*Cha
 }
 func (UnimplementedChargingServer) Release(context.Context, *ReleaseRequest) (*ReleaseResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Release not implemented")
+}
+func (UnimplementedChargingServer) ListCharges(context.Context, *ListChargesRequest) (*ListChargesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCharges not implemented")
+}
+func (UnimplementedChargingServer) ListLowBalance(context.Context, *ListLowBalanceRequest) (*ListLowBalanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLowBalance not implemented")
 }
 func (UnimplementedChargingServer) mustEmbedUnimplementedChargingServer() {}
 func (UnimplementedChargingServer) testEmbeddedByValue()                  {}
@@ -186,6 +224,42 @@ func _Charging_Release_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Charging_ListCharges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListChargesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChargingServer).ListCharges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Charging_ListCharges_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChargingServer).ListCharges(ctx, req.(*ListChargesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Charging_ListLowBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListLowBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ChargingServer).ListLowBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Charging_ListLowBalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ChargingServer).ListLowBalance(ctx, req.(*ListLowBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Charging_ServiceDesc is the grpc.ServiceDesc for Charging service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -204,6 +278,14 @@ var Charging_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Release",
 			Handler:    _Charging_Release_Handler,
+		},
+		{
+			MethodName: "ListCharges",
+			Handler:    _Charging_ListCharges_Handler,
+		},
+		{
+			MethodName: "ListLowBalance",
+			Handler:    _Charging_ListLowBalance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
