@@ -254,6 +254,33 @@ services:
       payments:
         condition: service_started
 
+  reports:
+    build:
+      context: ./services
+      dockerfile: reports/Dockerfile
+    environment:
+      REPORTS_CLICKHOUSE: clickhouse://omnifoni:dev-only@clickhouse:9000
+      REPORTS_KAFKA: kafka:9092
+      REPORTS_CATALOGUE_ADDR: catalogue:50053
+      REPORTS_IDENTITY_ADDR: http://identity:50056
+      REPORTS_ADDR: ":50061"
+      REPORTS_HTTP_ADDR: ":50062"
+      REPORTS_REFLECTION: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
+    ports:
+      - "50061:50061"
+      - "50062:50062"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      catalogue:
+        condition: service_started
+      identity:
+        condition: service_started
+
 volumes:
   pgdata:
   valkeydata:

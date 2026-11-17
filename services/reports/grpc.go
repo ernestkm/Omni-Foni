@@ -18,6 +18,7 @@ import (
 )
 
 type reportsServer struct {
+	pb.UnimplementedReportsServer
 	store *Store
 }
 

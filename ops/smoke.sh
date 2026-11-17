@@ -19,18 +19,19 @@ docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
 docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || fail "kafka"
 
-for s in charging switching mediation billing payments identity routing sbc reconciliation; do
+for s in charging switching mediation billing payments identity routing sbc reconciliation reports; do
   st=$(docker inspect --format '{{.State.Status}}' "omni-fon-$s-1" 2>/dev/null || echo missing)
   [ "$st" = "running" ] || fail "$s not running ($st)"
   echo "ok: $s running"
 done
 
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
+(cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 
 # The probe issues billing and payments RPCs through reconciliation, so the
 # trace backend must have spans for all three; otherwise tracing is broken.
 services=$(curl -fsS http://localhost:16686/api/services) || fail "jaeger api"
-for s in reconciliation billing payments; do
+for s in reconciliation billing payments reports; do
   echo "$services" | grep -q "\"$s\"" || fail "no traces for $s"
   echo "ok: traces for $s"
 done
