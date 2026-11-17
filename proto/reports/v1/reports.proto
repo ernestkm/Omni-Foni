@@ -5,7 +5,9 @@ package reports.v1;
 option go_package = "omnifoni/reports/gen/reportspb";
 
 // Reports answers CDR-level and grouped questions over the ClickHouse CDR
-// store. Money is integer minor units; rate_per_sec is a decimal string.
+// store, and mirrors the money surfaces (payments, charges and low balance)
+// plus the live-call registry. Money is integer minor units; rate_per_sec is a
+// decimal string.
 service Reports {
   rpc ListCdrs(ListCdrsRequest) returns (ListCdrsResponse);
   rpc Summarize(SummarizeRequest) returns (SummarizeResponse);

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 
 	pb "omnifoni/reports/gen/reportspb"
@@ -15,6 +16,9 @@ type LiveCallSource interface {
 }
 
 func (s *reportsServer) ListLiveCalls(ctx context.Context, req *pb.LiveCallsRequest) (*pb.LiveCallsResponse, error) {
+	ctx, span := otel.Tracer("reports").Start(ctx, "reports.list_live_calls")
+	defer span.End()
+
 	resp, err := s.live.ListLiveCalls(ctx, &switchingpb.ListLiveCallsRequest{AccountIds: req.GetAccountIds()})
 	if err != nil {
 		return nil, sourceError(err)

@@ -32,7 +32,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // Reports answers CDR-level and grouped questions over the ClickHouse CDR
-// store. Money is integer minor units; rate_per_sec is a decimal string.
+// store, and mirrors the money surfaces (payments, charges and low balance)
+// plus the live-call registry. Money is integer minor units; rate_per_sec is a
+// decimal string.
 type ReportsClient interface {
 	ListCdrs(ctx context.Context, in *ListCdrsRequest, opts ...grpc.CallOption) (*ListCdrsResponse, error)
 	Summarize(ctx context.Context, in *SummarizeRequest, opts ...grpc.CallOption) (*SummarizeResponse, error)
@@ -115,7 +117,9 @@ func (c *reportsClient) ListLiveCalls(ctx context.Context, in *LiveCallsRequest,
 // for forward compatibility.
 //
 // Reports answers CDR-level and grouped questions over the ClickHouse CDR
-// store. Money is integer minor units; rate_per_sec is a decimal string.
+// store, and mirrors the money surfaces (payments, charges and low balance)
+// plus the live-call registry. Money is integer minor units; rate_per_sec is a
+// decimal string.
 type ReportsServer interface {
 	ListCdrs(context.Context, *ListCdrsRequest) (*ListCdrsResponse, error)
 	Summarize(context.Context, *SummarizeRequest) (*SummarizeResponse, error)
