@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -143,6 +147,77 @@ func intersect(allowed, requested []string) []string {
 	return out
 }
 
+const (
+	csvMaxRows  = 10000
+	csvPageSize = 1000
+)
+
+func csvRequested(r *http.Request) (bool, bool) {
+	switch r.URL.Query().Get("format") {
+	case "", "json":
+		return false, true
+	case "csv":
+		return true, true
+	}
+	return false, false
+}
+
+func csvHeaders(w http.ResponseWriter, report string) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf(`attachment; filename="reports-%s-%s.csv"`, report, time.Now().UTC().Format("2006-01-02")))
+}
+
+func writeCSVHeaderOnly(w http.ResponseWriter, report string, header []string) {
+	csvHeaders(w, report)
+	cw := csv.NewWriter(w)
+	_ = cw.Write(header)
+	cw.Flush()
+}
+
+// streamCSV fetches the first page before writing anything, so argument, auth
+// and source errors still produce a normal JSON status. Later failures abort
+// the response after logging. tail, when non-nil, is written after the rows.
+func streamCSV(w http.ResponseWriter, r *http.Request, report string, header []string,
+	fetch func(cursor string) ([][]string, string, error), tail func() []string) {
+	rows, next, err := fetch("")
+	if err != nil {
+		writeErr(w, grpcStatus(err), err.Error())
+		return
+	}
+	csvHeaders(w, report)
+	cw := csv.NewWriter(w)
+	_ = cw.Write(header)
+	written := 0
+	for {
+		for _, row := range rows {
+			if written >= csvMaxRows {
+				break
+			}
+			_ = cw.Write(row)
+			written++
+		}
+		cw.Flush()
+		if written >= csvMaxRows || next == "" {
+			break
+		}
+		rows, next, err = fetch(next)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "csv stream aborted", "report", report, "err", err)
+			return
+		}
+	}
+	if tail != nil {
+		_ = cw.Write(tail())
+		cw.Flush()
+	}
+}
+
+var cdrCSVHeader = []string{
+	"call_id", "account_id", "destination", "cli", "started_at_ms", "ended_at_ms",
+	"charged_seconds", "end_reason", "trunk_id", "rate_per_sec", "amount_minor", "rate_missing",
+}
+
 type cdrJSON struct {
 	CallID         string `json:"call_id"`
 	AccountID      string `json:"account_id"`
@@ -170,6 +245,8 @@ type rowJSON struct {
 	AmountMinor int64  `json:"amount_minor"`
 }
 
+var summaryCSVHeader = []string{"key", "calls", "seconds", "amount_minor"}
+
 type summaryJSON struct {
 	Rows   []rowJSON `json:"rows"`
 	Totals rowJSON   `json:"totals"`
@@ -187,7 +264,16 @@ func (h *httpServer) ListCdrs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
 	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "cdrs", cdrCSVHeader)
+			return
+		}
 		writeJSON(w, http.StatusOK, listJSON{Cdrs: []cdrJSON{}})
 		return
 	}
@@ -213,9 +299,35 @@ func (h *httpServer) ListCdrs(w http.ResponseWriter, r *http.Request) {
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.Filter.AccountIds = intersect(ids, requested)
 		if len(req.Filter.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "cdrs", cdrCSVHeader)
+				return
+			}
 			writeJSON(w, http.StatusOK, listJSON{Cdrs: []cdrJSON{}})
 			return
 		}
+	}
+	if csvOut {
+		streamCSV(w, r, "cdrs", cdrCSVHeader, func(cursor string) ([][]string, string, error) {
+			req.Cursor = cursor
+			req.Limit = csvPageSize
+			resp, err := h.api.ListCdrs(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			rows := make([][]string, 0, len(resp.GetCdrs()))
+			for _, c := range resp.GetCdrs() {
+				rows = append(rows, []string{
+					c.GetCallId(), c.GetAccountId(), c.GetDestination(), c.GetCli(),
+					strconv.FormatInt(c.GetStartedAtMs(), 10), strconv.FormatInt(c.GetEndedAtMs(), 10),
+					strconv.FormatInt(c.GetChargedSeconds(), 10), c.GetEndReason(), c.GetTrunkId(),
+					c.GetRatePerSec(), strconv.FormatInt(c.GetAmountMinor(), 10),
+					strconv.FormatBool(c.GetRateMissing()),
+				})
+			}
+			return rows, resp.GetNextCursor(), nil
+		}, nil)
+		return
 	}
 
 	resp, err := h.api.ListCdrs(r.Context(), req)
@@ -247,7 +359,16 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
 	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "summary", summaryCSVHeader)
+			return
+		}
 		writeJSON(w, http.StatusOK, summaryJSON{Rows: []rowJSON{}, Totals: rowJSON{}})
 		return
 	}
@@ -278,9 +399,38 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.Filter.AccountIds = intersect(ids, requested)
 		if len(req.Filter.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "summary", summaryCSVHeader)
+				return
+			}
 			writeJSON(w, http.StatusOK, summaryJSON{Rows: []rowJSON{}, Totals: rowJSON{}})
 			return
 		}
+	}
+	if csvOut {
+		var totals rowJSON
+		streamCSV(w, r, "summary", summaryCSVHeader, func(string) ([][]string, string, error) {
+			resp, err := h.api.Summarize(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			totals = rowJSON{
+				Calls: resp.GetTotals().GetCalls(), Seconds: resp.GetTotals().GetSeconds(),
+				AmountMinor: resp.GetTotals().GetAmountMinor(),
+			}
+			rows := make([][]string, 0, len(resp.GetRows()))
+			for _, row := range resp.GetRows() {
+				rows = append(rows, []string{
+					row.GetKey(), strconv.FormatInt(row.GetCalls(), 10),
+					strconv.FormatInt(row.GetSeconds(), 10), strconv.FormatInt(row.GetAmountMinor(), 10),
+				})
+			}
+			return rows, "", nil
+		}, func() []string {
+			return []string{"TOTAL", strconv.FormatInt(totals.Calls, 10),
+				strconv.FormatInt(totals.Seconds, 10), strconv.FormatInt(totals.AmountMinor, 10)}
+		})
+		return
 	}
 
 	resp, err := h.api.Summarize(r.Context(), req)

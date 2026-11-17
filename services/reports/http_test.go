@@ -1,15 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	chargingpb "omnifoni/charging/gen/chargingpb"
 	paymentspb "omnifoni/payments/gen/paymentspb"
+	pb "omnifoni/reports/gen/reportspb"
 )
 
 func fakeIdentity(t *testing.T) *httptest.Server {
@@ -260,5 +265,120 @@ func TestHTTPPrefixGrouping(t *testing.T) {
 
 	if code, _ := get(t, srv.URL+"/reports/summary?group_by=prefix&prefix_len=abc&from=2026-11-17&to=2026-11-18", "reseller"); code != http.StatusBadRequest {
 		t.Fatalf("bad prefix_len = %d, want 400", code)
+	}
+}
+
+func getRaw(t *testing.T, url, token string) (int, http.Header, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp.StatusCode, resp.Header, string(b)
+}
+
+func TestHTTPCSVCDRsAndSummary(t *testing.T) {
+	reset(t)
+	day := time.Date(2026, 11, 17, 8, 0, 0, 0, time.UTC)
+	seed(t,
+		testRow("csv1", "a1", "27820001", "trunk-1", "normal", day, 60, 10),
+		testRow("csv2", "a1", "27820002", "trunk-1", "normal", day.Add(time.Hour), 30, 5),
+	)
+	srv := facade(t)
+	window := "from=2026-11-17&to=2026-11-18"
+
+	code, hdr, body := getRaw(t, srv.URL+"/reports/cdrs?"+window+"&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("cdrs = %d (%s)", code, body)
+	}
+	if ct := hdr.Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if cd := hdr.Get("Content-Disposition"); !strings.Contains(cd, `filename="reports-cdrs-`) {
+		t.Fatalf("content-disposition = %q", cd)
+	}
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("lines = %d (%q)", len(lines), body)
+	}
+	wantHeader := "call_id,account_id,destination,cli,started_at_ms,ended_at_ms,charged_seconds,end_reason,trunk_id,rate_per_sec,amount_minor,rate_missing"
+	if lines[0] != wantHeader {
+		t.Fatalf("header = %q", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "csv2,a1,27820002,") || !strings.HasSuffix(lines[1], ",5,false") {
+		t.Fatalf("row = %q", lines[1])
+	}
+
+	code, _, body = getRaw(t, srv.URL+"/reports/summary?group_by=day&"+window+"&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("summary = %d (%s)", code, body)
+	}
+	lines = strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 3 || lines[0] != "key,calls,seconds,amount_minor" {
+		t.Fatalf("summary lines = %q", lines)
+	}
+	if lines[2] != "TOTAL,2,90,15" {
+		t.Fatalf("totals row = %q", lines[2])
+	}
+
+	code, hdr, body = getRaw(t, srv.URL+"/reports/cdrs?"+window+"&format=json", "reseller")
+	if code != http.StatusOK || !strings.HasPrefix(hdr.Get("Content-Type"), "application/json") ||
+		!strings.Contains(body, `"cdrs"`) {
+		t.Fatalf("json = %d %q %q", code, hdr.Get("Content-Type"), body)
+	}
+
+	if code, _, _ := getRaw(t, srv.URL+"/reports/cdrs?"+window+"&format=bogus", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("bogus format = %d, want 400", code)
+	}
+}
+
+type pagingAPI struct {
+	API
+	fetched []string
+}
+
+func (p *pagingAPI) ListCdrs(_ context.Context, req *pb.ListCdrsRequest) (*pb.ListCdrsResponse, error) {
+	p.fetched = append(p.fetched, req.GetCursor())
+	rows := make([]*pb.Cdr, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		rows = append(rows, &pb.Cdr{CallId: fmt.Sprintf("%s-%04d", req.GetCursor(), i), AccountId: "a1"})
+	}
+	next := ""
+	if req.GetCursor() != "p9" {
+		next = "p" + strconv.Itoa(len(p.fetched))
+	}
+	return &pb.ListCdrsResponse{Cdrs: rows, NextCursor: next}, nil
+}
+
+func TestHTTPCSVCap(t *testing.T) {
+	api := &pagingAPI{}
+	mux := http.NewServeMux()
+	h := &httpServer{api: api, auth: NewAuthenticator(fakeIdentity(t).URL)}
+	mux.HandleFunc("GET /reports/cdrs", h.ListCdrs)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	code, _, body := getRaw(t, srv.URL+"/reports/cdrs?from=2026-11-17&to=2026-11-18&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("code = %d", code)
+	}
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 10001 {
+		t.Fatalf("lines = %d, want 10001 (header + 10000 rows)", len(lines))
+	}
+	if len(api.fetched) != 10 {
+		t.Fatalf("fetched %d pages, want 10", len(api.fetched))
 	}
 }
