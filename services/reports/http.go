@@ -18,6 +18,9 @@ import (
 type API interface {
 	ListCdrs(context.Context, *pb.ListCdrsRequest) (*pb.ListCdrsResponse, error)
 	Summarize(context.Context, *pb.SummarizeRequest) (*pb.SummarizeResponse, error)
+	ListPayments(context.Context, *pb.ListPaymentsRequest) (*pb.ListPaymentsResponse, error)
+	ListCharges(context.Context, *pb.ListChargesRequest) (*pb.ListChargesResponse, error)
+	ListLowBalance(context.Context, *pb.LowBalanceRequest) (*pb.LowBalanceResponse, error)
 }
 
 type Authenticator struct {
@@ -307,4 +310,207 @@ func grpcStatus(err error) int {
 		return http.StatusBadRequest
 	}
 	return http.StatusServiceUnavailable
+}
+
+type paymentJSON struct {
+	PaymentID   int64  `json:"payment_id"`
+	EventID     string `json:"event_id"`
+	AccountID   string `json:"account_id"`
+	Gateway     string `json:"gateway"`
+	AmountMinor int64  `json:"amount_minor"`
+	Status      string `json:"status"`
+	CreatedAtMS int64  `json:"created_at_ms"`
+}
+
+type paymentsJSON struct {
+	Payments   []paymentJSON `json:"payments"`
+	NextCursor string        `json:"next_cursor"`
+}
+
+type chargeJSON struct {
+	SessionID       string `json:"session_id"`
+	AccountID       string `json:"account_id"`
+	ChargedSeconds  int64  `json:"charged_seconds"`
+	AmountMinor     int64  `json:"amount_minor"`
+	BalanceAfter    int64  `json:"balance_after"`
+	LastChargedAtMS int64  `json:"last_charged_at_ms"`
+}
+
+type chargesJSON struct {
+	Charges    []chargeJSON `json:"charges"`
+	NextCursor string       `json:"next_cursor"`
+}
+
+type balanceJSON struct {
+	AccountID   string `json:"account_id"`
+	Kind        string `json:"kind"`
+	Balance     int64  `json:"balance"`
+	CreditLimit int64  `json:"credit_limit"`
+	Currency    string `json:"currency"`
+}
+
+type lowBalanceJSON struct {
+	Accounts   []balanceJSON `json:"accounts"`
+	NextCursor string        `json:"next_cursor"`
+}
+
+func (h *httpServer) Payments(w http.ResponseWriter, r *http.Request) {
+	token, ok := bearer(r)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	q := r.URL.Query()
+	ids, code, err := h.auth.Accounts(r.Context(), token, q.Get("tenant_id"))
+	if err != nil {
+		writeErr(w, code, err.Error())
+		return
+	}
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, paymentsJSON{Payments: []paymentJSON{}})
+		return
+	}
+	req := &pb.ListPaymentsRequest{
+		Filter: &pb.MoneyFilter{AccountIds: ids, From: q.Get("from"), To: q.Get("to")},
+		Status: q.Get("status"),
+		Cursor: q.Get("cursor"),
+	}
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		req.Limit = int32(n)
+	}
+	if requested := q["account_id"]; len(requested) > 0 {
+		req.Filter.AccountIds = intersect(ids, requested)
+		if len(req.Filter.AccountIds) == 0 {
+			writeJSON(w, http.StatusOK, paymentsJSON{Payments: []paymentJSON{}})
+			return
+		}
+	}
+
+	resp, err := h.api.ListPayments(r.Context(), req)
+	if err != nil {
+		writeErr(w, grpcStatus(err), err.Error())
+		return
+	}
+	out := paymentsJSON{Payments: []paymentJSON{}, NextCursor: resp.GetNextCursor()}
+	for _, p := range resp.GetPayments() {
+		out.Payments = append(out.Payments, paymentJSON{
+			PaymentID: p.GetPaymentId(), EventID: p.GetEventId(), AccountID: p.GetAccountId(),
+			Gateway: p.GetGateway(), AmountMinor: p.GetAmountMinor(), Status: p.GetStatus(),
+			CreatedAtMS: p.GetCreatedAtMs(),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *httpServer) Charges(w http.ResponseWriter, r *http.Request) {
+	token, ok := bearer(r)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	q := r.URL.Query()
+	ids, code, err := h.auth.Accounts(r.Context(), token, q.Get("tenant_id"))
+	if err != nil {
+		writeErr(w, code, err.Error())
+		return
+	}
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, chargesJSON{Charges: []chargeJSON{}})
+		return
+	}
+	req := &pb.ListChargesRequest{
+		Filter: &pb.MoneyFilter{AccountIds: ids, From: q.Get("from"), To: q.Get("to")},
+		Cursor: q.Get("cursor"),
+	}
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		req.Limit = int32(n)
+	}
+	if requested := q["account_id"]; len(requested) > 0 {
+		req.Filter.AccountIds = intersect(ids, requested)
+		if len(req.Filter.AccountIds) == 0 {
+			writeJSON(w, http.StatusOK, chargesJSON{Charges: []chargeJSON{}})
+			return
+		}
+	}
+
+	resp, err := h.api.ListCharges(r.Context(), req)
+	if err != nil {
+		writeErr(w, grpcStatus(err), err.Error())
+		return
+	}
+	out := chargesJSON{Charges: []chargeJSON{}, NextCursor: resp.GetNextCursor()}
+	for _, c := range resp.GetCharges() {
+		out.Charges = append(out.Charges, chargeJSON{
+			SessionID: c.GetSessionId(), AccountID: c.GetAccountId(),
+			ChargedSeconds: c.GetChargedSeconds(), AmountMinor: c.GetAmountMinor(),
+			BalanceAfter: c.GetBalanceAfter(), LastChargedAtMS: c.GetLastChargedAtMs(),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (h *httpServer) LowBalance(w http.ResponseWriter, r *http.Request) {
+	token, ok := bearer(r)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	q := r.URL.Query()
+	ids, code, err := h.auth.Accounts(r.Context(), token, q.Get("tenant_id"))
+	if err != nil {
+		writeErr(w, code, err.Error())
+		return
+	}
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, lowBalanceJSON{Accounts: []balanceJSON{}})
+		return
+	}
+	req := &pb.LowBalanceRequest{AccountIds: ids, Cursor: q.Get("cursor")}
+	if v := q.Get("threshold"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid threshold")
+			return
+		}
+		req.ThresholdMinor = n
+	}
+	if v := q.Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		req.Limit = int32(n)
+	}
+	if requested := q["account_id"]; len(requested) > 0 {
+		req.AccountIds = intersect(ids, requested)
+		if len(req.AccountIds) == 0 {
+			writeJSON(w, http.StatusOK, lowBalanceJSON{Accounts: []balanceJSON{}})
+			return
+		}
+	}
+
+	resp, err := h.api.ListLowBalance(r.Context(), req)
+	if err != nil {
+		writeErr(w, grpcStatus(err), err.Error())
+		return
+	}
+	out := lowBalanceJSON{Accounts: []balanceJSON{}, NextCursor: resp.GetNextCursor()}
+	for _, a := range resp.GetAccounts() {
+		out.Accounts = append(out.Accounts, balanceJSON{
+			AccountID: a.GetAccountId(), Kind: a.GetKind(), Balance: a.GetBalance(),
+			CreditLimit: a.GetCreditLimit(), Currency: a.GetCurrency(),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }

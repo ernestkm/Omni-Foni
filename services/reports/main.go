@@ -107,6 +107,9 @@ func main() {
 	h := &httpServer{api: api, auth: NewAuthenticator(identity)}
 	mux.HandleFunc("GET /reports/cdrs", h.ListCdrs)
 	mux.HandleFunc("GET /reports/summary", h.Summarize)
+	mux.HandleFunc("GET /reports/payments", h.Payments)
+	mux.HandleFunc("GET /reports/charges", h.Charges)
+	mux.HandleFunc("GET /reports/low-balance", h.LowBalance)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})

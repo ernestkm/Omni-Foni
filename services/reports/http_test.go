@@ -7,6 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	chargingpb "omnifoni/charging/gen/chargingpb"
+	paymentspb "omnifoni/payments/gen/paymentspb"
 )
 
 func fakeIdentity(t *testing.T) *httptest.Server {
@@ -47,10 +50,28 @@ func fakeIdentity(t *testing.T) *httptest.Server {
 
 func facade(t *testing.T) *httptest.Server {
 	t.Helper()
-	h := &httpServer{api: &reportsServer{store: store}, auth: NewAuthenticator(fakeIdentity(t).URL)}
+	h := &httpServer{api: &reportsServer{
+		store: store,
+		payments: &fakePayments{resp: &paymentspb.ListPaymentsResponse{Payments: []*paymentspb.Payment{{
+			PaymentId: 7, EventId: "evt", AccountId: "a1", Gateway: "stripe",
+			AmountMinor: 500, Status: "recorded", CreatedAtMs: 1000,
+		}}}},
+		charges: &fakeCharges{
+			resp: &chargingpb.ListChargesResponse{Charges: []*chargingpb.Charge{{
+				SessionId: "s1", AccountId: "a1", ChargedSeconds: 3,
+				AmountMinor: -4, BalanceAfter: 996, LastChargedAtMs: 2000,
+			}}},
+			balance: &chargingpb.ListLowBalanceResponse{Accounts: []*chargingpb.BalanceRow{{
+				AccountId: "a1", Kind: "prepaid", Balance: 0, Currency: "ZAR",
+			}}},
+		},
+	}, auth: NewAuthenticator(fakeIdentity(t).URL)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /reports/cdrs", h.ListCdrs)
 	mux.HandleFunc("GET /reports/summary", h.Summarize)
+	mux.HandleFunc("GET /reports/payments", h.Payments)
+	mux.HandleFunc("GET /reports/charges", h.Charges)
+	mux.HandleFunc("GET /reports/low-balance", h.LowBalance)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -171,5 +192,53 @@ func TestHTTPEmptyTenantSeesNothing(t *testing.T) {
 	totals := body["totals"].(map[string]any)
 	if totals["calls"].(float64) != 0 || totals["amount_minor"].(float64) != 0 {
 		t.Fatalf("empty tenant totals = %v, want zero", totals)
+	}
+}
+
+func TestHTTPMoneyReports(t *testing.T) {
+	srv := facade(t)
+	q := "from=2026-11-17&to=2026-11-18"
+
+	code, body := get(t, srv.URL+"/reports/payments?"+q, "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("payments = %d (%v)", code, body)
+	}
+	payments := body["payments"].([]any)
+	if len(payments) != 1 || payments[0].(map[string]any)["amount_minor"].(float64) != 500 {
+		t.Fatalf("payments = %v", payments)
+	}
+
+	code, body = get(t, srv.URL+"/reports/charges?"+q, "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("charges = %d (%v)", code, body)
+	}
+	charges := body["charges"].([]any)
+	if len(charges) != 1 || charges[0].(map[string]any)["amount_minor"].(float64) != -4 {
+		t.Fatalf("charges = %v", charges)
+	}
+
+	code, body = get(t, srv.URL+"/reports/low-balance?threshold=-5", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("low balance = %d (%v)", code, body)
+	}
+	accounts := body["accounts"].([]any)
+	if len(accounts) != 1 || accounts[0].(map[string]any)["account_id"] != "a1" {
+		t.Fatalf("accounts = %v", accounts)
+	}
+
+	if code, _ := get(t, srv.URL+"/reports/low-balance?threshold=abc", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("bad threshold = %d, want 400", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/payments?to=2026-11-18", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("missing from = %d, want 400", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/payments?"+q, ""); code != http.StatusUnauthorized {
+		t.Fatalf("no token = %d, want 401", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/charges?"+q, "user"); code != http.StatusForbidden {
+		t.Fatalf("user role = %d, want 403", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/payments?"+q+"&account_id=a2", "reseller"); code != http.StatusOK {
+		t.Fatalf("cross-tenant account filter = %d, want 200", code)
 	}
 }
