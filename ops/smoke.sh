@@ -25,6 +25,17 @@ for s in charging switching mediation billing payments identity routing sbc reco
   echo "ok: $s running"
 done
 
+tid=$(docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "SELECT tenant_id FROM tenants WHERE name='smoke' LIMIT 1")
+if [ -z "$tid" ]; then
+  tid=$(docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO tenants(name) VALUES ('smoke') RETURNING tenant_id")
+fi
+uid=$(docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO users(tenant_id,email,password_hash,role) VALUES ('$tid','smoke@local','x','admin') ON CONFLICT (email) DO UPDATE SET tenant_id=EXCLUDED.tenant_id RETURNING user_id")
+docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO sessions(token,user_id,expires_at) VALUES ('tok-smoke','$uid',now()+interval '1 hour') ON CONFLICT (token) DO UPDATE SET expires_at=now()+interval '1 hour'" >/dev/null
+csv=$(curl -fsS -H 'Authorization: Bearer tok-smoke' "http://localhost:50062/reports/cdrs?from=2026-01-01&to=2026-01-02&tenant_id=$tid&format=csv")
+hdr=${csv%%$'\n'*}
+[ "$hdr" = "call_id,account_id,destination,cli,started_at_ms,ended_at_ms,charged_seconds,end_reason,trunk_id,rate_per_sec,amount_minor,rate_missing" ] || fail "reports csv"
+echo "ok: reports csv"
+
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 
