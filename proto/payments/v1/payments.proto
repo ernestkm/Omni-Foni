@@ -15,6 +15,9 @@ service Payments {
   // ListAccountsForPeriod returns the distinct account ids with recorded
   // payments in one period.
   rpc ListAccountsForPeriod(ListAccountsForPeriodRequest) returns (ListAccountsForPeriodResponse);
+  // ListPayments returns recorded and void payments in a time window.
+  // Money is integer minor units; status is surfaced, not filtered by default.
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
 }
 
 message GetPaymentsTotalsRequest {
@@ -37,4 +40,28 @@ message ListAccountsForPeriodRequest {
 
 message ListAccountsForPeriodResponse {
   repeated string account_ids = 1;
+}
+
+message ListPaymentsRequest {
+  repeated string account_ids = 1; // empty = all accounts
+  int64 from_ms = 2;               // inclusive
+  int64 to_ms = 3;                 // exclusive
+  string status = 4;               // "" = all, else recorded|void
+  int32 limit = 5;                 // default 100, clamped 1..1000
+  string cursor = 6;               // base64url of "<created_at_ms>|<payment_id>"
+}
+
+message Payment {
+  int64 payment_id = 1;
+  string event_id = 2;
+  string account_id = 3;
+  string gateway = 4;
+  int64 amount_minor = 5;
+  string status = 6;
+  int64 created_at_ms = 7;
+}
+
+message ListPaymentsResponse {
+  repeated Payment payments = 1;
+  string next_cursor = 2; // "" when the page is the last one
 }

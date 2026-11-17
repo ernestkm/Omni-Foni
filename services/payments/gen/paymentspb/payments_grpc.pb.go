@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	Payments_GetPaymentsTotals_FullMethodName     = "/payments.v1.Payments/GetPaymentsTotals"
 	Payments_ListAccountsForPeriod_FullMethodName = "/payments.v1.Payments/ListAccountsForPeriod"
+	Payments_ListPayments_FullMethodName          = "/payments.v1.Payments/ListPayments"
 )
 
 // PaymentsClient is the client API for Payments service.
@@ -38,6 +39,9 @@ type PaymentsClient interface {
 	// ListAccountsForPeriod returns the distinct account ids with recorded
 	// payments in one period.
 	ListAccountsForPeriod(ctx context.Context, in *ListAccountsForPeriodRequest, opts ...grpc.CallOption) (*ListAccountsForPeriodResponse, error)
+	// ListPayments returns recorded and void payments in a time window.
+	// Money is integer minor units; status is surfaced, not filtered by default.
+	ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error)
 }
 
 type paymentsClient struct {
@@ -68,6 +72,16 @@ func (c *paymentsClient) ListAccountsForPeriod(ctx context.Context, in *ListAcco
 	return out, nil
 }
 
+func (c *paymentsClient) ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPaymentsResponse)
+	err := c.cc.Invoke(ctx, Payments_ListPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PaymentsServer is the server API for Payments service.
 // All implementations must embed UnimplementedPaymentsServer
 // for forward compatibility.
@@ -83,6 +97,9 @@ type PaymentsServer interface {
 	// ListAccountsForPeriod returns the distinct account ids with recorded
 	// payments in one period.
 	ListAccountsForPeriod(context.Context, *ListAccountsForPeriodRequest) (*ListAccountsForPeriodResponse, error)
+	// ListPayments returns recorded and void payments in a time window.
+	// Money is integer minor units; status is surfaced, not filtered by default.
+	ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error)
 	mustEmbedUnimplementedPaymentsServer()
 }
 
@@ -98,6 +115,9 @@ func (UnimplementedPaymentsServer) GetPaymentsTotals(context.Context, *GetPaymen
 }
 func (UnimplementedPaymentsServer) ListAccountsForPeriod(context.Context, *ListAccountsForPeriodRequest) (*ListAccountsForPeriodResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListAccountsForPeriod not implemented")
+}
+func (UnimplementedPaymentsServer) ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPayments not implemented")
 }
 func (UnimplementedPaymentsServer) mustEmbedUnimplementedPaymentsServer() {}
 func (UnimplementedPaymentsServer) testEmbeddedByValue()                  {}
@@ -156,6 +176,24 @@ func _Payments_ListAccountsForPeriod_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Payments_ListPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentsServer).ListPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Payments_ListPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentsServer).ListPayments(ctx, req.(*ListPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Payments_ServiceDesc is the grpc.ServiceDesc for Payments service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -170,6 +208,10 @@ var Payments_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListAccountsForPeriod",
 			Handler:    _Payments_ListAccountsForPeriod_Handler,
+		},
+		{
+			MethodName: "ListPayments",
+			Handler:    _Payments_ListPayments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
