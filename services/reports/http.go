@@ -184,6 +184,10 @@ func (h *httpServer) ListCdrs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, listJSON{Cdrs: []cdrJSON{}})
+		return
+	}
 	req := &pb.ListCdrsRequest{
 		Filter: &pb.CdrFilter{
 			AccountIds:        ids,
@@ -238,6 +242,10 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 	ids, code, err := h.auth.Accounts(r.Context(), token, q.Get("tenant_id"))
 	if err != nil {
 		writeErr(w, code, err.Error())
+		return
+	}
+	if len(ids) == 0 {
+		writeJSON(w, http.StatusOK, summaryJSON{Rows: []rowJSON{}, Totals: rowJSON{}})
 		return
 	}
 	group, ok := groupFromString(q.Get("group_by"))

@@ -21,6 +21,8 @@ func fakeIdentity(t *testing.T) *httptest.Server {
 			fmt.Fprint(w, `{"user_id":"u2","email":"r@x","role":"reseller","tenant_id":"t1"}`)
 		case "Bearer user":
 			fmt.Fprint(w, `{"user_id":"u3","email":"c@x","role":"user","tenant_id":"t1"}`)
+		case "Bearer empty":
+			fmt.Fprint(w, `{"user_id":"u4","email":"e@x","role":"reseller","tenant_id":"t3"}`)
 		default:
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 		}
@@ -32,6 +34,8 @@ func fakeIdentity(t *testing.T) *httptest.Server {
 			fmt.Fprint(w, `[{"account_id":"a1","tenant_id":"t1"}]`)
 		case "t2":
 			fmt.Fprint(w, `[{"account_id":"a2","tenant_id":"t2"}]`)
+		case "t3":
+			fmt.Fprint(w, `[]`)
 		default:
 			http.Error(w, "boom", http.StatusInternalServerError)
 		}
@@ -142,5 +146,30 @@ func TestHTTPSummary(t *testing.T) {
 	}
 	if code, _ := get(t, srv.URL+"/reports/summary?from=2026-11-12&to=2026-11-13", "reseller"); code != http.StatusBadRequest {
 		t.Fatalf("missing group_by = %d, want 400", code)
+	}
+}
+
+func TestHTTPEmptyTenantSeesNothing(t *testing.T) {
+	reset(t)
+	start := time.Date(2026, 11, 12, 8, 0, 0, 0, time.UTC)
+	seed(t,
+		testRow("et1", "a1", "27820001", "trunk-1", "normal", start, 60, 10),
+		testRow("et2", "a2", "27820002", "trunk-1", "normal", start.Add(time.Minute), 60, 20),
+	)
+	srv := facade(t)
+	q := "from=2026-11-12&to=2026-11-13"
+
+	code, body := get(t, srv.URL+"/reports/cdrs?"+q, "empty")
+	if code != http.StatusOK || len(body["cdrs"].([]any)) != 0 {
+		t.Fatalf("empty tenant cdrs = %d %v, want empty 200", code, body)
+	}
+
+	code, body = get(t, srv.URL+"/reports/summary?"+q+"&group_by=account", "empty")
+	if code != http.StatusOK || len(body["rows"].([]any)) != 0 {
+		t.Fatalf("empty tenant summary = %d %v, want empty rows", code, body)
+	}
+	totals := body["totals"].(map[string]any)
+	if totals["calls"].(float64) != 0 || totals["amount_minor"].(float64) != 0 {
+		t.Fatalf("empty tenant totals = %v, want zero", totals)
 	}
 }
