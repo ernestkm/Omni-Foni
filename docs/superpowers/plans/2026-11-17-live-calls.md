@@ -659,8 +659,8 @@ func TestHTTPLiveCalls(t *testing.T) {
 	if code, _ := get(t, srv.URL+"/reports/live-calls", "admin"); code != http.StatusBadRequest {
 		t.Fatalf("admin without tenant = %d, want 400", code)
 	}
-	if code, _ := get(t, srv.URL+"/reports/live-calls?tenant_id=t2", "admin"); code != http.StatusOK {
-		t.Fatalf("admin t2 = %d", code)
+	if code, _ := get(t, srv.URL+"/reports/live-calls?tenant_id=t1", "admin"); code != http.StatusOK {
+		t.Fatalf("admin t1 = %d", code)
 	}
 	code, body = get(t, srv.URL+"/reports/live-calls", "empty")
 	if code != http.StatusOK {
