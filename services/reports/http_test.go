@@ -12,9 +12,13 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	chargingpb "omnifoni/charging/gen/chargingpb"
 	paymentspb "omnifoni/payments/gen/paymentspb"
 	pb "omnifoni/reports/gen/reportspb"
+	switchingpb "omnifoni/switching/gen/switchingpb"
 )
 
 func fakeIdentity(t *testing.T) *httptest.Server {
@@ -70,6 +74,10 @@ func facade(t *testing.T) *httptest.Server {
 				AccountId: "a1", Kind: "prepaid", Balance: 0, Currency: "ZAR",
 			}}},
 		},
+		live: &fakeLive{resp: &switchingpb.ListLiveCallsResponse{Calls: []*switchingpb.LiveCall{{
+			CallId: "c1", SessionId: "s1", AccountId: "a1", Destination: "2782", Cli: "cli",
+			TrunkId: "trunk-1", StartedAtMs: 1000, ElapsedSeconds: 5, MaxSeconds: 600, ChargedSeconds: 4,
+		}}}},
 	}, auth: NewAuthenticator(fakeIdentity(t).URL)}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /reports/cdrs", h.ListCdrs)
@@ -77,6 +85,7 @@ func facade(t *testing.T) *httptest.Server {
 	mux.HandleFunc("GET /reports/payments", h.Payments)
 	mux.HandleFunc("GET /reports/charges", h.Charges)
 	mux.HandleFunc("GET /reports/low-balance", h.LowBalance)
+	mux.HandleFunc("GET /reports/live-calls", h.LiveCalls)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -428,5 +437,70 @@ func TestHTTPCSVMoneyReports(t *testing.T) {
 	}
 	if code, _, _ := getRaw(t, srv.URL+"/reports/charges?"+q+"&format=csv", "user"); code != http.StatusForbidden {
 		t.Fatalf("user csv = %d, want 403", code)
+	}
+}
+
+func TestHTTPLiveCalls(t *testing.T) {
+	srv := facade(t)
+
+	code, body := get(t, srv.URL+"/reports/live-calls", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("code = %d", code)
+	}
+	calls, ok := body["calls"].([]any)
+	if !ok || len(calls) != 1 {
+		t.Fatalf("calls = %v", body["calls"])
+	}
+	row := calls[0].(map[string]any)
+	if row["call_id"] != "c1" || row["account_id"] != "a1" || row["max_seconds"] != float64(600) ||
+		row["charged_seconds"] != float64(4) || row["elapsed_seconds"] != float64(5) {
+		t.Fatalf("row = %v", row)
+	}
+
+	if code, _ := get(t, srv.URL+"/reports/live-calls", "user"); code != http.StatusForbidden {
+		t.Fatalf("user = %d, want 403", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/live-calls", "admin"); code != http.StatusBadRequest {
+		t.Fatalf("admin without tenant = %d, want 400", code)
+	}
+	if code, _ := get(t, srv.URL+"/reports/live-calls?tenant_id=t1", "admin"); code != http.StatusOK {
+		t.Fatalf("admin t1 = %d", code)
+	}
+	code, body = get(t, srv.URL+"/reports/live-calls", "empty")
+	if code != http.StatusOK {
+		t.Fatalf("empty tenant = %d", code)
+	}
+	if calls, ok := body["calls"].([]any); !ok || len(calls) != 0 {
+		t.Fatalf("empty tenant calls = %v", body["calls"])
+	}
+
+	code, hdr, raw := getRaw(t, srv.URL+"/reports/live-calls?format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("csv = %d (%s)", code, raw)
+	}
+	if ct := hdr.Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Fatalf("content-type = %q", ct)
+	}
+	lines := strings.Split(strings.TrimSpace(raw), "\n")
+	if len(lines) != 2 ||
+		lines[0] != "call_id,session_id,account_id,destination,cli,trunk_id,started_at_ms,elapsed_seconds,max_seconds,charged_seconds" {
+		t.Fatalf("csv lines = %q", lines)
+	}
+	if lines[1] != "c1,s1,a1,2782,cli,trunk-1,1000,5,600,4" {
+		t.Fatalf("csv row = %q", lines[1])
+	}
+	if code, _, _ := getRaw(t, srv.URL+"/reports/live-calls?format=bogus", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("bogus format = %d, want 400", code)
+	}
+
+	down := &httpServer{api: &reportsServer{
+		live: &fakeLive{err: status.Error(codes.Unavailable, "down")},
+	}, auth: NewAuthenticator(fakeIdentity(t).URL)}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /reports/live-calls", down.LiveCalls)
+	downSrv := httptest.NewServer(mux)
+	t.Cleanup(downSrv.Close)
+	if code, _ := get(t, downSrv.URL+"/reports/live-calls", "reseller"); code != http.StatusServiceUnavailable {
+		t.Fatalf("outage = %d, want 503", code)
 	}
 }

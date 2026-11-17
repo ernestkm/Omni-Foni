@@ -25,6 +25,7 @@ type API interface {
 	ListPayments(context.Context, *pb.ListPaymentsRequest) (*pb.ListPaymentsResponse, error)
 	ListCharges(context.Context, *pb.ListChargesRequest) (*pb.ListChargesResponse, error)
 	ListLowBalance(context.Context, *pb.LowBalanceRequest) (*pb.LowBalanceResponse, error)
+	ListLiveCalls(context.Context, *pb.LiveCallsRequest) (*pb.LiveCallsResponse, error)
 }
 
 type Authenticator struct {
@@ -778,6 +779,102 @@ func (h *httpServer) LowBalance(w http.ResponseWriter, r *http.Request) {
 		out.Accounts = append(out.Accounts, balanceJSON{
 			AccountID: a.GetAccountId(), Kind: a.GetKind(), Balance: a.GetBalance(),
 			CreditLimit: a.GetCreditLimit(), Currency: a.GetCurrency(),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+var liveCallCSVHeader = []string{
+	"call_id", "session_id", "account_id", "destination", "cli", "trunk_id",
+	"started_at_ms", "elapsed_seconds", "max_seconds", "charged_seconds",
+}
+
+type liveCallJSON struct {
+	CallID         string `json:"call_id"`
+	SessionID      string `json:"session_id"`
+	AccountID      string `json:"account_id"`
+	Destination    string `json:"destination"`
+	CLI            string `json:"cli"`
+	TrunkID        string `json:"trunk_id"`
+	StartedAtMS    int64  `json:"started_at_ms"`
+	ElapsedSeconds int64  `json:"elapsed_seconds"`
+	MaxSeconds     int64  `json:"max_seconds"`
+	ChargedSeconds int64  `json:"charged_seconds"`
+}
+
+type liveCallsJSON struct {
+	Calls []liveCallJSON `json:"calls"`
+}
+
+func (h *httpServer) LiveCalls(w http.ResponseWriter, r *http.Request) {
+	token, ok := bearer(r)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	q := r.URL.Query()
+	ids, code, err := h.auth.Accounts(r.Context(), token, q.Get("tenant_id"))
+	if err != nil {
+		writeErr(w, code, err.Error())
+		return
+	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
+	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "live-calls", liveCallCSVHeader)
+			return
+		}
+		writeJSON(w, http.StatusOK, liveCallsJSON{Calls: []liveCallJSON{}})
+		return
+	}
+	req := &pb.LiveCallsRequest{AccountIds: ids}
+	if requested := q["account_id"]; len(requested) > 0 {
+		req.AccountIds = intersect(ids, requested)
+		if len(req.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "live-calls", liveCallCSVHeader)
+				return
+			}
+			writeJSON(w, http.StatusOK, liveCallsJSON{Calls: []liveCallJSON{}})
+			return
+		}
+	}
+	if csvOut {
+		streamCSV(w, r, "live-calls", liveCallCSVHeader, func(string) ([][]string, string, error) {
+			resp, err := h.api.ListLiveCalls(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			rows := make([][]string, 0, len(resp.GetCalls()))
+			for _, c := range resp.GetCalls() {
+				rows = append(rows, []string{
+					c.GetCallId(), c.GetSessionId(), c.GetAccountId(), c.GetDestination(),
+					c.GetCli(), c.GetTrunkId(), strconv.FormatInt(c.GetStartedAtMs(), 10),
+					strconv.FormatInt(c.GetElapsedSeconds(), 10), strconv.FormatInt(c.GetMaxSeconds(), 10),
+					strconv.FormatInt(c.GetChargedSeconds(), 10),
+				})
+			}
+			return rows, "", nil
+		}, nil)
+		return
+	}
+
+	resp, err := h.api.ListLiveCalls(r.Context(), req)
+	if err != nil {
+		writeErr(w, grpcStatus(err), err.Error())
+		return
+	}
+	out := liveCallsJSON{Calls: []liveCallJSON{}}
+	for _, c := range resp.GetCalls() {
+		out.Calls = append(out.Calls, liveCallJSON{
+			CallID: c.GetCallId(), SessionID: c.GetSessionId(), AccountID: c.GetAccountId(),
+			Destination: c.GetDestination(), CLI: c.GetCli(), TrunkID: c.GetTrunkId(),
+			StartedAtMS: c.GetStartedAtMs(), ElapsedSeconds: c.GetElapsedSeconds(),
+			MaxSeconds: c.GetMaxSeconds(), ChargedSeconds: c.GetChargedSeconds(),
 		})
 	}
 	writeJSON(w, http.StatusOK, out)
