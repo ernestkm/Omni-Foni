@@ -25,8 +25,10 @@ type reportsServer struct {
 }
 
 const (
-	defaultLimit = 100
-	maxLimit     = 1000
+	defaultLimit     = 100
+	maxLimit         = 1000
+	defaultPrefixLen = 3
+	maxPrefixLen     = 15
 )
 
 func clampLimit(n int32) int {
@@ -160,8 +162,23 @@ func parseGroup(g pb.GroupBy) (GroupBy, error) {
 		return GroupAccount, nil
 	case pb.GroupBy_TRUNK:
 		return GroupTrunk, nil
+	case pb.GroupBy_PREFIX:
+		return GroupPrefix, nil
 	}
 	return "", errors.New("group_by is required")
+}
+
+func parsePrefixLen(g GroupBy, n int32) (int, error) {
+	if g != GroupPrefix {
+		return 0, nil
+	}
+	if n == 0 {
+		return defaultPrefixLen, nil
+	}
+	if n < 1 || n > maxPrefixLen {
+		return 0, errors.New("prefix_len must be 1..15")
+	}
+	return int(n), nil
 }
 
 func (s *reportsServer) Summarize(ctx context.Context, req *pb.SummarizeRequest) (*pb.SummarizeResponse, error) {
@@ -173,14 +190,19 @@ func (s *reportsServer) Summarize(ctx context.Context, req *pb.SummarizeRequest)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	prefixLen, err := parsePrefixLen(group, req.GetPrefixLen())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
 	ctx, span := otel.Tracer("reports").Start(ctx, "reports.summarize")
 	span.SetAttributes(attribute.String("group_by", string(group)),
 		attribute.String("from", f.From.Format(time.RFC3339)),
-		attribute.String("to", f.To.Format(time.RFC3339)))
+		attribute.String("to", f.To.Format(time.RFC3339)),
+		attribute.Int("prefix_len", prefixLen))
 	defer span.End()
 
-	rows, err := s.store.Summarize(ctx, f, group)
+	rows, err := s.store.Summarize(ctx, f, group, prefixLen)
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, "store unavailable")
 	}

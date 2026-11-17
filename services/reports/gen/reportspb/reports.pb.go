@@ -29,6 +29,7 @@ const (
 	GroupBy_DESTINATION          GroupBy = 2
 	GroupBy_ACCOUNT              GroupBy = 3
 	GroupBy_TRUNK                GroupBy = 4
+	GroupBy_PREFIX               GroupBy = 5
 )
 
 // Enum value maps for GroupBy.
@@ -39,6 +40,7 @@ var (
 		2: "DESTINATION",
 		3: "ACCOUNT",
 		4: "TRUNK",
+		5: "PREFIX",
 	}
 	GroupBy_value = map[string]int32{
 		"GROUP_BY_UNSPECIFIED": 0,
@@ -46,6 +48,7 @@ var (
 		"DESTINATION":          2,
 		"ACCOUNT":              3,
 		"TRUNK":                4,
+		"PREFIX":               5,
 	}
 )
 
@@ -408,6 +411,7 @@ type SummarizeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Filter        *CdrFilter             `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
 	GroupBy       GroupBy                `protobuf:"varint,2,opt,name=group_by,json=groupBy,proto3,enum=reports.v1.GroupBy" json:"group_by,omitempty"`
+	PrefixLen     int32                  `protobuf:"varint,3,opt,name=prefix_len,json=prefixLen,proto3" json:"prefix_len,omitempty"` // only for PREFIX; 0 = default 3, valid 1..15
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -454,6 +458,13 @@ func (x *SummarizeRequest) GetGroupBy() GroupBy {
 		return x.GroupBy
 	}
 	return GroupBy_GROUP_BY_UNSPECIFIED
+}
+
+func (x *SummarizeRequest) GetPrefixLen() int32 {
+	if x != nil {
+		return x.PrefixLen
+	}
+	return 0
 }
 
 type SummaryRow struct {
@@ -1279,10 +1290,12 @@ const file_reports_v1_reports_proto_rawDesc = "" +
 	"\x10ListCdrsResponse\x12#\n" +
 	"\x04cdrs\x18\x01 \x03(\v2\x0f.reports.v1.CdrR\x04cdrs\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor\"q\n" +
+	"nextCursor\"\x90\x01\n" +
 	"\x10SummarizeRequest\x12-\n" +
 	"\x06filter\x18\x01 \x01(\v2\x15.reports.v1.CdrFilterR\x06filter\x12.\n" +
-	"\bgroup_by\x18\x02 \x01(\x0e2\x13.reports.v1.GroupByR\agroupBy\"q\n" +
+	"\bgroup_by\x18\x02 \x01(\x0e2\x13.reports.v1.GroupByR\agroupBy\x12\x1d\n" +
+	"\n" +
+	"prefix_len\x18\x03 \x01(\x05R\tprefixLen\"q\n" +
 	"\n" +
 	"SummaryRow\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
@@ -1350,13 +1363,15 @@ const file_reports_v1_reports_proto_rawDesc = "" +
 	"\x12LowBalanceResponse\x122\n" +
 	"\baccounts\x18\x01 \x03(\v2\x16.reports.v1.BalanceRowR\baccounts\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor*U\n" +
+	"nextCursor*a\n" +
 	"\aGroupBy\x12\x18\n" +
 	"\x14GROUP_BY_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03DAY\x10\x01\x12\x0f\n" +
 	"\vDESTINATION\x10\x02\x12\v\n" +
 	"\aACCOUNT\x10\x03\x12\t\n" +
-	"\x05TRUNK\x10\x042\x8e\x03\n" +
+	"\x05TRUNK\x10\x04\x12\n" +
+	"\n" +
+	"\x06PREFIX\x10\x052\x8e\x03\n" +
 	"\aReports\x12E\n" +
 	"\bListCdrs\x12\x1b.reports.v1.ListCdrsRequest\x1a\x1c.reports.v1.ListCdrsResponse\x12H\n" +
 	"\tSummarize\x12\x1c.reports.v1.SummarizeRequest\x1a\x1d.reports.v1.SummarizeResponse\x12Q\n" +

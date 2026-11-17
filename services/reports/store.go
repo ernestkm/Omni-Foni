@@ -38,6 +38,7 @@ const (
 	GroupDestination GroupBy = "destination"
 	GroupAccount     GroupBy = "account"
 	GroupTrunk       GroupBy = "trunk"
+	GroupPrefix      GroupBy = "prefix"
 )
 
 type SummaryRow struct {
@@ -190,16 +191,21 @@ func keyExpr(g GroupBy) (string, error) {
 		return "account_id", nil
 	case GroupTrunk:
 		return "trunk_id", nil
+	case GroupPrefix:
+		return "left(destination, ?)", nil
 	}
 	return "", fmt.Errorf("unknown group_by %q", g)
 }
 
-func (s *Store) Summarize(ctx context.Context, f Filter, g GroupBy) ([]SummaryRow, error) {
+func (s *Store) Summarize(ctx context.Context, f Filter, g GroupBy, prefixLen int) ([]SummaryRow, error) {
 	key, err := keyExpr(g)
 	if err != nil {
 		return nil, err
 	}
 	where, args := f.where()
+	if g == GroupPrefix {
+		args = append([]any{uint8(prefixLen)}, args...)
+	}
 	q := `SELECT ` + key + ` AS k, count(), sum(charged_seconds), sum(amount_minor)
 		FROM reports.cdrs FINAL
 		WHERE ` + where + `

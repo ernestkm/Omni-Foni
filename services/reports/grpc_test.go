@@ -103,3 +103,39 @@ func TestSummarize(t *testing.T) {
 		t.Fatalf("unspecified group err = %v, want InvalidArgument", err)
 	}
 }
+
+func TestSummarizePrefixLen(t *testing.T) {
+	reset(t)
+	day := time.Date(2026, 11, 12, 8, 0, 0, 0, time.UTC)
+	seed(t,
+		testRow("s1", "a1", "27820001", "trunk-1", "normal", day, 60, 10),
+		testRow("s2", "a1", "3555999", "trunk-1", "normal", day, 30, 5),
+	)
+	srv := &reportsServer{store: store}
+	filter := &pb.CdrFilter{From: "2026-11-12", To: "2026-11-13"}
+
+	def, err := srv.Summarize(context.Background(), &pb.SummarizeRequest{
+		Filter: filter, GroupBy: pb.GroupBy_PREFIX})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(def.GetRows()) != 2 || def.GetRows()[0].GetKey() != "278" {
+		t.Fatalf("default prefix = %+v", def.GetRows())
+	}
+
+	two, err := srv.Summarize(context.Background(), &pb.SummarizeRequest{
+		Filter: filter, GroupBy: pb.GroupBy_PREFIX, PrefixLen: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(two.GetRows()) != 2 || two.GetRows()[0].GetKey() != "27" {
+		t.Fatalf("prefix_len 2 = %+v", two.GetRows())
+	}
+
+	for _, n := range []int32{-1, 16} {
+		if _, err := srv.Summarize(context.Background(), &pb.SummarizeRequest{
+			Filter: filter, GroupBy: pb.GroupBy_PREFIX, PrefixLen: n}); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("prefix_len %d err = %v, want InvalidArgument", n, err)
+		}
+	}
+}

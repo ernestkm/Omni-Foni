@@ -242,3 +242,23 @@ func TestHTTPMoneyReports(t *testing.T) {
 		t.Fatalf("cross-tenant account filter = %d, want 200", code)
 	}
 }
+
+func TestHTTPPrefixGrouping(t *testing.T) {
+	reset(t)
+	day := time.Date(2026, 11, 17, 8, 0, 0, 0, time.UTC)
+	seed(t, testRow("h1", "a1", "27820001", "trunk-1", "normal", day, 60, 10))
+	srv := facade(t)
+
+	code, body := get(t, srv.URL+"/reports/summary?group_by=prefix&prefix_len=2&from=2026-11-17&to=2026-11-18", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("code = %d (%v)", code, body)
+	}
+	rows := body["rows"].([]any)
+	if len(rows) != 1 || rows[0].(map[string]any)["key"] != "27" {
+		t.Fatalf("rows = %v", rows)
+	}
+
+	if code, _ := get(t, srv.URL+"/reports/summary?group_by=prefix&prefix_len=abc&from=2026-11-17&to=2026-11-18", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("bad prefix_len = %d, want 400", code)
+	}
+}

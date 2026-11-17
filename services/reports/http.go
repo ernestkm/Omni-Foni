@@ -267,6 +267,14 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 		},
 		GroupBy: group,
 	}
+	if v := q.Get("prefix_len"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid prefix_len")
+			return
+		}
+		req.PrefixLen = int32(n)
+	}
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.Filter.AccountIds = intersect(ids, requested)
 		if len(req.Filter.AccountIds) == 0 {
@@ -301,6 +309,8 @@ func groupFromString(s string) (pb.GroupBy, bool) {
 		return pb.GroupBy_ACCOUNT, true
 	case "trunk":
 		return pb.GroupBy_TRUNK, true
+	case "prefix":
+		return pb.GroupBy_PREFIX, true
 	}
 	return pb.GroupBy_GROUP_BY_UNSPECIFIED, false
 }

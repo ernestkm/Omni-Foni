@@ -55,11 +55,13 @@ enum GroupBy {
   DESTINATION = 2;
   ACCOUNT = 3;
   TRUNK = 4;
+  PREFIX = 5;
 }
 
 message SummarizeRequest {
   CdrFilter filter = 1;
   GroupBy group_by = 2;
+  int32 prefix_len = 3; // only for PREFIX; 0 = default 3, valid 1..15
 }
 
 message SummaryRow {

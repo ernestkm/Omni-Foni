@@ -152,7 +152,7 @@ func TestSummarizeGroupsAndTotals(t *testing.T) {
 	ctx := context.Background()
 	f := Filter{From: day1, To: day2.Add(24 * time.Hour)}
 
-	byDay, err := store.Summarize(ctx, f, GroupDay)
+	byDay, err := store.Summarize(ctx, f, GroupDay, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSummarizeGroupsAndTotals(t *testing.T) {
 		t.Fatalf("byDay = %+v", byDay)
 	}
 
-	byDest, err := store.Summarize(ctx, f, GroupDestination)
+	byDest, err := store.Summarize(ctx, f, GroupDestination, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,30 @@ func TestSummarizeGroupsAndTotals(t *testing.T) {
 		t.Fatalf("byDest = %+v", byDest)
 	}
 
-	if _, err := store.Summarize(ctx, f, GroupBy("bogus")); err == nil {
+	if _, err := store.Summarize(ctx, f, GroupBy("bogus"), 0); err == nil {
 		t.Fatal("Summarize with unknown group = nil error, want error")
+	}
+}
+
+func TestSummarizePrefix(t *testing.T) {
+	reset(t)
+	day := time.Date(2026, 11, 10, 9, 0, 0, 0, time.UTC)
+	seed(t,
+		testRow("c1", "a1", "27820001", "trunk-1", "normal", day, 60, 10),
+		testRow("c2", "a1", "27820002", "trunk-1", "normal", day, 30, 5),
+		testRow("c3", "a2", "27", "trunk-2", "normal", day, 10, 3),
+		testRow("c4", "a2", "3555999", "trunk-2", "normal", day, 20, 2),
+	)
+	f := Filter{From: day, To: day.Add(24 * time.Hour)}
+	rows, err := store.Summarize(context.Background(), f, GroupPrefix, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	if rows[0].Key != "278" || rows[0].AmountMinor != 15 || rows[0].Calls != 2 ||
+		rows[1].Key != "27" || rows[2].Key != "355" {
+		t.Fatalf("prefix rows = %+v", rows)
 	}
 }
