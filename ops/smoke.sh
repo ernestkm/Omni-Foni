@@ -31,6 +31,11 @@ if [ -z "$tid" ]; then
 fi
 uid=$(docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO users(tenant_id,email,password_hash,role) VALUES ('$tid','smoke@local','x','admin') ON CONFLICT (email) DO UPDATE SET tenant_id=EXCLUDED.tenant_id RETURNING user_id")
 docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO sessions(token,user_id,expires_at) VALUES ('tok-smoke','$uid',now()+interval '1 hour') ON CONFLICT (token) DO UPDATE SET expires_at=now()+interval '1 hour'" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d catalogue -qAt -c "INSERT INTO rates(prefix,rate_per_sec) VALUES ('2782',0.010000) ON CONFLICT (prefix) DO UPDATE SET rate_per_sec=EXCLUDED.rate_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INTO accounts(account_id,kind,balance,credit_limit) VALUES ('acc-smoke-live','prepaid',100000,0) ON CONFLICT (account_id) DO UPDATE SET balance=EXCLUDED.balance, kind='prepaid', credit_limit=0" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled) VALUES ('trunk-smoke',true) ON CONFLICT (trunk_id) DO UPDATE SET enabled=true" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-smoke',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO accounts(account_id,tenant_id,created_by) VALUES ('acc-smoke-live','$tid','$uid') ON CONFLICT (account_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id, created_by=EXCLUDED.created_by" >/dev/null
 csv=$(curl -fsS -H 'Authorization: Bearer tok-smoke' "http://localhost:50062/reports/cdrs?from=2026-01-01&to=2026-01-02&tenant_id=$tid&format=csv")
 hdr=${csv%%$'\n'*}
 [ "$hdr" = "call_id,account_id,destination,cli,started_at_ms,ended_at_ms,charged_seconds,end_reason,trunk_id,rate_per_sec,amount_minor,rate_missing" ] || fail "reports csv"
@@ -38,6 +43,7 @@ echo "ok: reports csv"
 
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
+(cd services/reports && go run ./cmd/smokelive) || fail "live calls probe"
 
 # The probe issues billing and payments RPCs through reconciliation, so the
 # trace backend must have spans for all three; otherwise tracing is broken.
