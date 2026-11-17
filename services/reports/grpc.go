@@ -19,13 +19,25 @@ import (
 
 type reportsServer struct {
 	pb.UnimplementedReportsServer
-	store *Store
+	store    *Store
+	payments PaymentSource
+	charges  ChargeSource
 }
 
 const (
 	defaultLimit = 100
 	maxLimit     = 1000
 )
+
+func clampLimit(n int32) int {
+	if n <= 0 {
+		return defaultLimit
+	}
+	if int(n) > maxLimit {
+		return maxLimit
+	}
+	return int(n)
+}
 
 func parseBound(s string, endOfDay bool) (time.Time, error) {
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
@@ -92,13 +104,7 @@ func (s *reportsServer) ListCdrs(ctx context.Context, req *pb.ListCdrsRequest) (
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	limit := int(req.GetLimit())
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
+	limit := clampLimit(req.GetLimit())
 	var cur *Cursor
 	if c := req.GetCursor(); c != "" {
 		cur, err = decodeCursor(c)

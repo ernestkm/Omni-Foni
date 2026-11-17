@@ -576,6 +576,670 @@ func (x *SummarizeResponse) GetTotals() *SummaryRow {
 	return nil
 }
 
+type MoneyFilter struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountIds    []string               `protobuf:"bytes,1,rep,name=account_ids,json=accountIds,proto3" json:"account_ids,omitempty"`
+	From          string                 `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"` // required; YYYY-MM-DD or RFC3339, inclusive
+	To            string                 `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`     // required; YYYY-MM-DD (whole day) or RFC3339, exclusive
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MoneyFilter) Reset() {
+	*x = MoneyFilter{}
+	mi := &file_reports_v1_reports_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MoneyFilter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MoneyFilter) ProtoMessage() {}
+
+func (x *MoneyFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MoneyFilter.ProtoReflect.Descriptor instead.
+func (*MoneyFilter) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MoneyFilter) GetAccountIds() []string {
+	if x != nil {
+		return x.AccountIds
+	}
+	return nil
+}
+
+func (x *MoneyFilter) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *MoneyFilter) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
+type ListPaymentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Filter        *MoneyFilter           `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "" = all, else recorded|void
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor        string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentsRequest) Reset() {
+	*x = ListPaymentsRequest{}
+	mi := &file_reports_v1_reports_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPaymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPaymentsRequest) ProtoMessage() {}
+
+func (x *ListPaymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPaymentsRequest.ProtoReflect.Descriptor instead.
+func (*ListPaymentsRequest) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ListPaymentsRequest) GetFilter() *MoneyFilter {
+	if x != nil {
+		return x.Filter
+	}
+	return nil
+}
+
+func (x *ListPaymentsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListPaymentsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListPaymentsRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type Payment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PaymentId     int64                  `protobuf:"varint,1,opt,name=payment_id,json=paymentId,proto3" json:"payment_id,omitempty"`
+	EventId       string                 `protobuf:"bytes,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
+	AccountId     string                 `protobuf:"bytes,3,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Gateway       string                 `protobuf:"bytes,4,opt,name=gateway,proto3" json:"gateway,omitempty"`
+	AmountMinor   int64                  `protobuf:"varint,5,opt,name=amount_minor,json=amountMinor,proto3" json:"amount_minor,omitempty"`
+	Status        string                 `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAtMs   int64                  `protobuf:"varint,7,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Payment) Reset() {
+	*x = Payment{}
+	mi := &file_reports_v1_reports_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Payment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Payment) ProtoMessage() {}
+
+func (x *Payment) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Payment.ProtoReflect.Descriptor instead.
+func (*Payment) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *Payment) GetPaymentId() int64 {
+	if x != nil {
+		return x.PaymentId
+	}
+	return 0
+}
+
+func (x *Payment) GetEventId() string {
+	if x != nil {
+		return x.EventId
+	}
+	return ""
+}
+
+func (x *Payment) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *Payment) GetGateway() string {
+	if x != nil {
+		return x.Gateway
+	}
+	return ""
+}
+
+func (x *Payment) GetAmountMinor() int64 {
+	if x != nil {
+		return x.AmountMinor
+	}
+	return 0
+}
+
+func (x *Payment) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *Payment) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+type ListPaymentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payments      []*Payment             `protobuf:"bytes,1,rep,name=payments,proto3" json:"payments,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPaymentsResponse) Reset() {
+	*x = ListPaymentsResponse{}
+	mi := &file_reports_v1_reports_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPaymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPaymentsResponse) ProtoMessage() {}
+
+func (x *ListPaymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPaymentsResponse.ProtoReflect.Descriptor instead.
+func (*ListPaymentsResponse) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListPaymentsResponse) GetPayments() []*Payment {
+	if x != nil {
+		return x.Payments
+	}
+	return nil
+}
+
+func (x *ListPaymentsResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+type ListChargesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Filter        *MoneyFilter           `protobuf:"bytes,1,opt,name=filter,proto3" json:"filter,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor        string                 `protobuf:"bytes,3,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListChargesRequest) Reset() {
+	*x = ListChargesRequest{}
+	mi := &file_reports_v1_reports_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChargesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChargesRequest) ProtoMessage() {}
+
+func (x *ListChargesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChargesRequest.ProtoReflect.Descriptor instead.
+func (*ListChargesRequest) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ListChargesRequest) GetFilter() *MoneyFilter {
+	if x != nil {
+		return x.Filter
+	}
+	return nil
+}
+
+func (x *ListChargesRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListChargesRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type Charge struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SessionId       string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	AccountId       string                 `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	ChargedSeconds  int64                  `protobuf:"varint,3,opt,name=charged_seconds,json=chargedSeconds,proto3" json:"charged_seconds,omitempty"`
+	AmountMinor     int64                  `protobuf:"varint,4,opt,name=amount_minor,json=amountMinor,proto3" json:"amount_minor,omitempty"`
+	BalanceAfter    int64                  `protobuf:"varint,5,opt,name=balance_after,json=balanceAfter,proto3" json:"balance_after,omitempty"`
+	LastChargedAtMs int64                  `protobuf:"varint,6,opt,name=last_charged_at_ms,json=lastChargedAtMs,proto3" json:"last_charged_at_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *Charge) Reset() {
+	*x = Charge{}
+	mi := &file_reports_v1_reports_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Charge) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Charge) ProtoMessage() {}
+
+func (x *Charge) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Charge.ProtoReflect.Descriptor instead.
+func (*Charge) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Charge) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *Charge) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *Charge) GetChargedSeconds() int64 {
+	if x != nil {
+		return x.ChargedSeconds
+	}
+	return 0
+}
+
+func (x *Charge) GetAmountMinor() int64 {
+	if x != nil {
+		return x.AmountMinor
+	}
+	return 0
+}
+
+func (x *Charge) GetBalanceAfter() int64 {
+	if x != nil {
+		return x.BalanceAfter
+	}
+	return 0
+}
+
+func (x *Charge) GetLastChargedAtMs() int64 {
+	if x != nil {
+		return x.LastChargedAtMs
+	}
+	return 0
+}
+
+type ListChargesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Charges       []*Charge              `protobuf:"bytes,1,rep,name=charges,proto3" json:"charges,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListChargesResponse) Reset() {
+	*x = ListChargesResponse{}
+	mi := &file_reports_v1_reports_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListChargesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListChargesResponse) ProtoMessage() {}
+
+func (x *ListChargesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListChargesResponse.ProtoReflect.Descriptor instead.
+func (*ListChargesResponse) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListChargesResponse) GetCharges() []*Charge {
+	if x != nil {
+		return x.Charges
+	}
+	return nil
+}
+
+func (x *ListChargesResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
+type LowBalanceRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AccountIds     []string               `protobuf:"bytes,1,rep,name=account_ids,json=accountIds,proto3" json:"account_ids,omitempty"`
+	ThresholdMinor int64                  `protobuf:"varint,2,opt,name=threshold_minor,json=thresholdMinor,proto3" json:"threshold_minor,omitempty"`
+	Limit          int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	Cursor         string                 `protobuf:"bytes,4,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LowBalanceRequest) Reset() {
+	*x = LowBalanceRequest{}
+	mi := &file_reports_v1_reports_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LowBalanceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LowBalanceRequest) ProtoMessage() {}
+
+func (x *LowBalanceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LowBalanceRequest.ProtoReflect.Descriptor instead.
+func (*LowBalanceRequest) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *LowBalanceRequest) GetAccountIds() []string {
+	if x != nil {
+		return x.AccountIds
+	}
+	return nil
+}
+
+func (x *LowBalanceRequest) GetThresholdMinor() int64 {
+	if x != nil {
+		return x.ThresholdMinor
+	}
+	return 0
+}
+
+func (x *LowBalanceRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *LowBalanceRequest) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
+type BalanceRow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountId     string                 `protobuf:"bytes,1,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Balance       int64                  `protobuf:"varint,3,opt,name=balance,proto3" json:"balance,omitempty"`
+	CreditLimit   int64                  `protobuf:"varint,4,opt,name=credit_limit,json=creditLimit,proto3" json:"credit_limit,omitempty"`
+	Currency      string                 `protobuf:"bytes,5,opt,name=currency,proto3" json:"currency,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BalanceRow) Reset() {
+	*x = BalanceRow{}
+	mi := &file_reports_v1_reports_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BalanceRow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BalanceRow) ProtoMessage() {}
+
+func (x *BalanceRow) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BalanceRow.ProtoReflect.Descriptor instead.
+func (*BalanceRow) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *BalanceRow) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *BalanceRow) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *BalanceRow) GetBalance() int64 {
+	if x != nil {
+		return x.Balance
+	}
+	return 0
+}
+
+func (x *BalanceRow) GetCreditLimit() int64 {
+	if x != nil {
+		return x.CreditLimit
+	}
+	return 0
+}
+
+func (x *BalanceRow) GetCurrency() string {
+	if x != nil {
+		return x.Currency
+	}
+	return ""
+}
+
+type LowBalanceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accounts      []*BalanceRow          `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	NextCursor    string                 `protobuf:"bytes,2,opt,name=next_cursor,json=nextCursor,proto3" json:"next_cursor,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LowBalanceResponse) Reset() {
+	*x = LowBalanceResponse{}
+	mi := &file_reports_v1_reports_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LowBalanceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LowBalanceResponse) ProtoMessage() {}
+
+func (x *LowBalanceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LowBalanceResponse.ProtoReflect.Descriptor instead.
+func (*LowBalanceResponse) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *LowBalanceResponse) GetAccounts() []*BalanceRow {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+func (x *LowBalanceResponse) GetNextCursor() string {
+	if x != nil {
+		return x.NextCursor
+	}
+	return ""
+}
+
 var File_reports_v1_reports_proto protoreflect.FileDescriptor
 
 const file_reports_v1_reports_proto_rawDesc = "" +
@@ -627,16 +1291,78 @@ const file_reports_v1_reports_proto_rawDesc = "" +
 	"\famount_minor\x18\x04 \x01(\x03R\vamountMinor\"o\n" +
 	"\x11SummarizeResponse\x12*\n" +
 	"\x04rows\x18\x01 \x03(\v2\x16.reports.v1.SummaryRowR\x04rows\x12.\n" +
-	"\x06totals\x18\x02 \x01(\v2\x16.reports.v1.SummaryRowR\x06totals*U\n" +
+	"\x06totals\x18\x02 \x01(\v2\x16.reports.v1.SummaryRowR\x06totals\"R\n" +
+	"\vMoneyFilter\x12\x1f\n" +
+	"\vaccount_ids\x18\x01 \x03(\tR\n" +
+	"accountIds\x12\x12\n" +
+	"\x04from\x18\x02 \x01(\tR\x04from\x12\x0e\n" +
+	"\x02to\x18\x03 \x01(\tR\x02to\"\x8c\x01\n" +
+	"\x13ListPaymentsRequest\x12/\n" +
+	"\x06filter\x18\x01 \x01(\v2\x17.reports.v1.MoneyFilterR\x06filter\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\"\xdb\x01\n" +
+	"\aPayment\x12\x1d\n" +
+	"\n" +
+	"payment_id\x18\x01 \x01(\x03R\tpaymentId\x12\x19\n" +
+	"\bevent_id\x18\x02 \x01(\tR\aeventId\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x03 \x01(\tR\taccountId\x12\x18\n" +
+	"\agateway\x18\x04 \x01(\tR\agateway\x12!\n" +
+	"\famount_minor\x18\x05 \x01(\x03R\vamountMinor\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12\"\n" +
+	"\rcreated_at_ms\x18\a \x01(\x03R\vcreatedAtMs\"h\n" +
+	"\x14ListPaymentsResponse\x12/\n" +
+	"\bpayments\x18\x01 \x03(\v2\x13.reports.v1.PaymentR\bpayments\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor\"s\n" +
+	"\x12ListChargesRequest\x12/\n" +
+	"\x06filter\x18\x01 \x01(\v2\x17.reports.v1.MoneyFilterR\x06filter\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\xe4\x01\n" +
+	"\x06Charge\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x02 \x01(\tR\taccountId\x12'\n" +
+	"\x0fcharged_seconds\x18\x03 \x01(\x03R\x0echargedSeconds\x12!\n" +
+	"\famount_minor\x18\x04 \x01(\x03R\vamountMinor\x12#\n" +
+	"\rbalance_after\x18\x05 \x01(\x03R\fbalanceAfter\x12+\n" +
+	"\x12last_charged_at_ms\x18\x06 \x01(\x03R\x0flastChargedAtMs\"d\n" +
+	"\x13ListChargesResponse\x12,\n" +
+	"\acharges\x18\x01 \x03(\v2\x12.reports.v1.ChargeR\acharges\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor\"\x8b\x01\n" +
+	"\x11LowBalanceRequest\x12\x1f\n" +
+	"\vaccount_ids\x18\x01 \x03(\tR\n" +
+	"accountIds\x12'\n" +
+	"\x0fthreshold_minor\x18\x02 \x01(\x03R\x0ethresholdMinor\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06cursor\x18\x04 \x01(\tR\x06cursor\"\x98\x01\n" +
+	"\n" +
+	"BalanceRow\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x01 \x01(\tR\taccountId\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
+	"\abalance\x18\x03 \x01(\x03R\abalance\x12!\n" +
+	"\fcredit_limit\x18\x04 \x01(\x03R\vcreditLimit\x12\x1a\n" +
+	"\bcurrency\x18\x05 \x01(\tR\bcurrency\"i\n" +
+	"\x12LowBalanceResponse\x122\n" +
+	"\baccounts\x18\x01 \x03(\v2\x16.reports.v1.BalanceRowR\baccounts\x12\x1f\n" +
+	"\vnext_cursor\x18\x02 \x01(\tR\n" +
+	"nextCursor*U\n" +
 	"\aGroupBy\x12\x18\n" +
 	"\x14GROUP_BY_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03DAY\x10\x01\x12\x0f\n" +
 	"\vDESTINATION\x10\x02\x12\v\n" +
 	"\aACCOUNT\x10\x03\x12\t\n" +
-	"\x05TRUNK\x10\x042\x9a\x01\n" +
+	"\x05TRUNK\x10\x042\x8e\x03\n" +
 	"\aReports\x12E\n" +
 	"\bListCdrs\x12\x1b.reports.v1.ListCdrsRequest\x1a\x1c.reports.v1.ListCdrsResponse\x12H\n" +
-	"\tSummarize\x12\x1c.reports.v1.SummarizeRequest\x1a\x1d.reports.v1.SummarizeResponseB Z\x1eomnifoni/reports/gen/reportspbb\x06proto3"
+	"\tSummarize\x12\x1c.reports.v1.SummarizeRequest\x1a\x1d.reports.v1.SummarizeResponse\x12Q\n" +
+	"\fListPayments\x12\x1f.reports.v1.ListPaymentsRequest\x1a .reports.v1.ListPaymentsResponse\x12N\n" +
+	"\vListCharges\x12\x1e.reports.v1.ListChargesRequest\x1a\x1f.reports.v1.ListChargesResponse\x12O\n" +
+	"\x0eListLowBalance\x12\x1d.reports.v1.LowBalanceRequest\x1a\x1e.reports.v1.LowBalanceResponseB Z\x1eomnifoni/reports/gen/reportspbb\x06proto3"
 
 var (
 	file_reports_v1_reports_proto_rawDescOnce sync.Once
@@ -651,33 +1377,54 @@ func file_reports_v1_reports_proto_rawDescGZIP() []byte {
 }
 
 var file_reports_v1_reports_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_reports_v1_reports_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_reports_v1_reports_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_reports_v1_reports_proto_goTypes = []any{
-	(GroupBy)(0),              // 0: reports.v1.GroupBy
-	(*CdrFilter)(nil),         // 1: reports.v1.CdrFilter
-	(*ListCdrsRequest)(nil),   // 2: reports.v1.ListCdrsRequest
-	(*Cdr)(nil),               // 3: reports.v1.Cdr
-	(*ListCdrsResponse)(nil),  // 4: reports.v1.ListCdrsResponse
-	(*SummarizeRequest)(nil),  // 5: reports.v1.SummarizeRequest
-	(*SummaryRow)(nil),        // 6: reports.v1.SummaryRow
-	(*SummarizeResponse)(nil), // 7: reports.v1.SummarizeResponse
+	(GroupBy)(0),                 // 0: reports.v1.GroupBy
+	(*CdrFilter)(nil),            // 1: reports.v1.CdrFilter
+	(*ListCdrsRequest)(nil),      // 2: reports.v1.ListCdrsRequest
+	(*Cdr)(nil),                  // 3: reports.v1.Cdr
+	(*ListCdrsResponse)(nil),     // 4: reports.v1.ListCdrsResponse
+	(*SummarizeRequest)(nil),     // 5: reports.v1.SummarizeRequest
+	(*SummaryRow)(nil),           // 6: reports.v1.SummaryRow
+	(*SummarizeResponse)(nil),    // 7: reports.v1.SummarizeResponse
+	(*MoneyFilter)(nil),          // 8: reports.v1.MoneyFilter
+	(*ListPaymentsRequest)(nil),  // 9: reports.v1.ListPaymentsRequest
+	(*Payment)(nil),              // 10: reports.v1.Payment
+	(*ListPaymentsResponse)(nil), // 11: reports.v1.ListPaymentsResponse
+	(*ListChargesRequest)(nil),   // 12: reports.v1.ListChargesRequest
+	(*Charge)(nil),               // 13: reports.v1.Charge
+	(*ListChargesResponse)(nil),  // 14: reports.v1.ListChargesResponse
+	(*LowBalanceRequest)(nil),    // 15: reports.v1.LowBalanceRequest
+	(*BalanceRow)(nil),           // 16: reports.v1.BalanceRow
+	(*LowBalanceResponse)(nil),   // 17: reports.v1.LowBalanceResponse
 }
 var file_reports_v1_reports_proto_depIdxs = []int32{
-	1, // 0: reports.v1.ListCdrsRequest.filter:type_name -> reports.v1.CdrFilter
-	3, // 1: reports.v1.ListCdrsResponse.cdrs:type_name -> reports.v1.Cdr
-	1, // 2: reports.v1.SummarizeRequest.filter:type_name -> reports.v1.CdrFilter
-	0, // 3: reports.v1.SummarizeRequest.group_by:type_name -> reports.v1.GroupBy
-	6, // 4: reports.v1.SummarizeResponse.rows:type_name -> reports.v1.SummaryRow
-	6, // 5: reports.v1.SummarizeResponse.totals:type_name -> reports.v1.SummaryRow
-	2, // 6: reports.v1.Reports.ListCdrs:input_type -> reports.v1.ListCdrsRequest
-	5, // 7: reports.v1.Reports.Summarize:input_type -> reports.v1.SummarizeRequest
-	4, // 8: reports.v1.Reports.ListCdrs:output_type -> reports.v1.ListCdrsResponse
-	7, // 9: reports.v1.Reports.Summarize:output_type -> reports.v1.SummarizeResponse
-	8, // [8:10] is the sub-list for method output_type
-	6, // [6:8] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	1,  // 0: reports.v1.ListCdrsRequest.filter:type_name -> reports.v1.CdrFilter
+	3,  // 1: reports.v1.ListCdrsResponse.cdrs:type_name -> reports.v1.Cdr
+	1,  // 2: reports.v1.SummarizeRequest.filter:type_name -> reports.v1.CdrFilter
+	0,  // 3: reports.v1.SummarizeRequest.group_by:type_name -> reports.v1.GroupBy
+	6,  // 4: reports.v1.SummarizeResponse.rows:type_name -> reports.v1.SummaryRow
+	6,  // 5: reports.v1.SummarizeResponse.totals:type_name -> reports.v1.SummaryRow
+	8,  // 6: reports.v1.ListPaymentsRequest.filter:type_name -> reports.v1.MoneyFilter
+	10, // 7: reports.v1.ListPaymentsResponse.payments:type_name -> reports.v1.Payment
+	8,  // 8: reports.v1.ListChargesRequest.filter:type_name -> reports.v1.MoneyFilter
+	13, // 9: reports.v1.ListChargesResponse.charges:type_name -> reports.v1.Charge
+	16, // 10: reports.v1.LowBalanceResponse.accounts:type_name -> reports.v1.BalanceRow
+	2,  // 11: reports.v1.Reports.ListCdrs:input_type -> reports.v1.ListCdrsRequest
+	5,  // 12: reports.v1.Reports.Summarize:input_type -> reports.v1.SummarizeRequest
+	9,  // 13: reports.v1.Reports.ListPayments:input_type -> reports.v1.ListPaymentsRequest
+	12, // 14: reports.v1.Reports.ListCharges:input_type -> reports.v1.ListChargesRequest
+	15, // 15: reports.v1.Reports.ListLowBalance:input_type -> reports.v1.LowBalanceRequest
+	4,  // 16: reports.v1.Reports.ListCdrs:output_type -> reports.v1.ListCdrsResponse
+	7,  // 17: reports.v1.Reports.Summarize:output_type -> reports.v1.SummarizeResponse
+	11, // 18: reports.v1.Reports.ListPayments:output_type -> reports.v1.ListPaymentsResponse
+	14, // 19: reports.v1.Reports.ListCharges:output_type -> reports.v1.ListChargesResponse
+	17, // 20: reports.v1.Reports.ListLowBalance:output_type -> reports.v1.LowBalanceResponse
+	16, // [16:21] is the sub-list for method output_type
+	11, // [11:16] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_reports_v1_reports_proto_init() }
@@ -691,7 +1438,7 @@ func file_reports_v1_reports_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_reports_v1_reports_proto_rawDesc), len(file_reports_v1_reports_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

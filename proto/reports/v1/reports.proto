@@ -9,6 +9,9 @@ option go_package = "omnifoni/reports/gen/reportspb";
 service Reports {
   rpc ListCdrs(ListCdrsRequest) returns (ListCdrsResponse);
   rpc Summarize(SummarizeRequest) returns (SummarizeResponse);
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+  rpc ListCharges(ListChargesRequest) returns (ListChargesResponse);
+  rpc ListLowBalance(LowBalanceRequest) returns (LowBalanceResponse);
 }
 
 message CdrFilter {
@@ -69,4 +72,72 @@ message SummaryRow {
 message SummarizeResponse {
   repeated SummaryRow rows = 1;
   SummaryRow totals = 2;
+}
+
+message MoneyFilter {
+  repeated string account_ids = 1;
+  string from = 2; // required; YYYY-MM-DD or RFC3339, inclusive
+  string to = 3;   // required; YYYY-MM-DD (whole day) or RFC3339, exclusive
+}
+
+message ListPaymentsRequest {
+  MoneyFilter filter = 1;
+  string status = 2; // "" = all, else recorded|void
+  int32 limit = 3;
+  string cursor = 4;
+}
+
+message Payment {
+  int64 payment_id = 1;
+  string event_id = 2;
+  string account_id = 3;
+  string gateway = 4;
+  int64 amount_minor = 5;
+  string status = 6;
+  int64 created_at_ms = 7;
+}
+
+message ListPaymentsResponse {
+  repeated Payment payments = 1;
+  string next_cursor = 2;
+}
+
+message ListChargesRequest {
+  MoneyFilter filter = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message Charge {
+  string session_id = 1;
+  string account_id = 2;
+  int64 charged_seconds = 3;
+  int64 amount_minor = 4;
+  int64 balance_after = 5;
+  int64 last_charged_at_ms = 6;
+}
+
+message ListChargesResponse {
+  repeated Charge charges = 1;
+  string next_cursor = 2;
+}
+
+message LowBalanceRequest {
+  repeated string account_ids = 1;
+  int64 threshold_minor = 2;
+  int32 limit = 3;
+  string cursor = 4;
+}
+
+message BalanceRow {
+  string account_id = 1;
+  string kind = 2;
+  int64 balance = 3;
+  int64 credit_limit = 4;
+  string currency = 5;
+}
+
+message LowBalanceResponse {
+  repeated BalanceRow accounts = 1;
+  string next_cursor = 2;
 }

@@ -19,8 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Reports_ListCdrs_FullMethodName  = "/reports.v1.Reports/ListCdrs"
-	Reports_Summarize_FullMethodName = "/reports.v1.Reports/Summarize"
+	Reports_ListCdrs_FullMethodName       = "/reports.v1.Reports/ListCdrs"
+	Reports_Summarize_FullMethodName      = "/reports.v1.Reports/Summarize"
+	Reports_ListPayments_FullMethodName   = "/reports.v1.Reports/ListPayments"
+	Reports_ListCharges_FullMethodName    = "/reports.v1.Reports/ListCharges"
+	Reports_ListLowBalance_FullMethodName = "/reports.v1.Reports/ListLowBalance"
 )
 
 // ReportsClient is the client API for Reports service.
@@ -32,6 +35,9 @@ const (
 type ReportsClient interface {
 	ListCdrs(ctx context.Context, in *ListCdrsRequest, opts ...grpc.CallOption) (*ListCdrsResponse, error)
 	Summarize(ctx context.Context, in *SummarizeRequest, opts ...grpc.CallOption) (*SummarizeResponse, error)
+	ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error)
+	ListCharges(ctx context.Context, in *ListChargesRequest, opts ...grpc.CallOption) (*ListChargesResponse, error)
+	ListLowBalance(ctx context.Context, in *LowBalanceRequest, opts ...grpc.CallOption) (*LowBalanceResponse, error)
 }
 
 type reportsClient struct {
@@ -62,6 +68,36 @@ func (c *reportsClient) Summarize(ctx context.Context, in *SummarizeRequest, opt
 	return out, nil
 }
 
+func (c *reportsClient) ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPaymentsResponse)
+	err := c.cc.Invoke(ctx, Reports_ListPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportsClient) ListCharges(ctx context.Context, in *ListChargesRequest, opts ...grpc.CallOption) (*ListChargesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListChargesResponse)
+	err := c.cc.Invoke(ctx, Reports_ListCharges_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *reportsClient) ListLowBalance(ctx context.Context, in *LowBalanceRequest, opts ...grpc.CallOption) (*LowBalanceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LowBalanceResponse)
+	err := c.cc.Invoke(ctx, Reports_ListLowBalance_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReportsServer is the server API for Reports service.
 // All implementations must embed UnimplementedReportsServer
 // for forward compatibility.
@@ -71,6 +107,9 @@ func (c *reportsClient) Summarize(ctx context.Context, in *SummarizeRequest, opt
 type ReportsServer interface {
 	ListCdrs(context.Context, *ListCdrsRequest) (*ListCdrsResponse, error)
 	Summarize(context.Context, *SummarizeRequest) (*SummarizeResponse, error)
+	ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error)
+	ListCharges(context.Context, *ListChargesRequest) (*ListChargesResponse, error)
+	ListLowBalance(context.Context, *LowBalanceRequest) (*LowBalanceResponse, error)
 	mustEmbedUnimplementedReportsServer()
 }
 
@@ -86,6 +125,15 @@ func (UnimplementedReportsServer) ListCdrs(context.Context, *ListCdrsRequest) (*
 }
 func (UnimplementedReportsServer) Summarize(context.Context, *SummarizeRequest) (*SummarizeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Summarize not implemented")
+}
+func (UnimplementedReportsServer) ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPayments not implemented")
+}
+func (UnimplementedReportsServer) ListCharges(context.Context, *ListChargesRequest) (*ListChargesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCharges not implemented")
+}
+func (UnimplementedReportsServer) ListLowBalance(context.Context, *LowBalanceRequest) (*LowBalanceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLowBalance not implemented")
 }
 func (UnimplementedReportsServer) mustEmbedUnimplementedReportsServer() {}
 func (UnimplementedReportsServer) testEmbeddedByValue()                 {}
@@ -144,6 +192,60 @@ func _Reports_Summarize_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Reports_ListPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportsServer).ListPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Reports_ListPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportsServer).ListPayments(ctx, req.(*ListPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Reports_ListCharges_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListChargesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportsServer).ListCharges(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Reports_ListCharges_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportsServer).ListCharges(ctx, req.(*ListChargesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Reports_ListLowBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LowBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportsServer).ListLowBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Reports_ListLowBalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportsServer).ListLowBalance(ctx, req.(*LowBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Reports_ServiceDesc is the grpc.ServiceDesc for Reports service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -158,6 +260,18 @@ var Reports_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Summarize",
 			Handler:    _Reports_Summarize_Handler,
+		},
+		{
+			MethodName: "ListPayments",
+			Handler:    _Reports_ListPayments_Handler,
+		},
+		{
+			MethodName: "ListCharges",
+			Handler:    _Reports_ListCharges_Handler,
+		},
+		{
+			MethodName: "ListLowBalance",
+			Handler:    _Reports_ListLowBalance_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
