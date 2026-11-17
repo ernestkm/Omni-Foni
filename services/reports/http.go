@@ -472,6 +472,10 @@ func grpcStatus(err error) int {
 	return http.StatusServiceUnavailable
 }
 
+var paymentCSVHeader = []string{
+	"payment_id", "event_id", "account_id", "gateway", "amount_minor", "status", "created_at_ms",
+}
+
 type paymentJSON struct {
 	PaymentID   int64  `json:"payment_id"`
 	EventID     string `json:"event_id"`
@@ -487,6 +491,10 @@ type paymentsJSON struct {
 	NextCursor string        `json:"next_cursor"`
 }
 
+var chargeCSVHeader = []string{
+	"session_id", "account_id", "charged_seconds", "amount_minor", "balance_after", "last_charged_at_ms",
+}
+
 type chargeJSON struct {
 	SessionID       string `json:"session_id"`
 	AccountID       string `json:"account_id"`
@@ -500,6 +508,8 @@ type chargesJSON struct {
 	Charges    []chargeJSON `json:"charges"`
 	NextCursor string       `json:"next_cursor"`
 }
+
+var balanceCSVHeader = []string{"account_id", "kind", "balance", "credit_limit", "currency"}
 
 type balanceJSON struct {
 	AccountID   string `json:"account_id"`
@@ -526,7 +536,16 @@ func (h *httpServer) Payments(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
 	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "payments", paymentCSVHeader)
+			return
+		}
 		writeJSON(w, http.StatusOK, paymentsJSON{Payments: []paymentJSON{}})
 		return
 	}
@@ -546,9 +565,33 @@ func (h *httpServer) Payments(w http.ResponseWriter, r *http.Request) {
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.Filter.AccountIds = intersect(ids, requested)
 		if len(req.Filter.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "payments", paymentCSVHeader)
+				return
+			}
 			writeJSON(w, http.StatusOK, paymentsJSON{Payments: []paymentJSON{}})
 			return
 		}
+	}
+	if csvOut {
+		streamCSV(w, r, "payments", paymentCSVHeader, func(cursor string) ([][]string, string, error) {
+			req.Cursor = cursor
+			req.Limit = csvPageSize
+			resp, err := h.api.ListPayments(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			rows := make([][]string, 0, len(resp.GetPayments()))
+			for _, p := range resp.GetPayments() {
+				rows = append(rows, []string{
+					strconv.FormatInt(p.GetPaymentId(), 10), p.GetEventId(), p.GetAccountId(),
+					p.GetGateway(), strconv.FormatInt(p.GetAmountMinor(), 10), p.GetStatus(),
+					strconv.FormatInt(p.GetCreatedAtMs(), 10),
+				})
+			}
+			return rows, resp.GetNextCursor(), nil
+		}, nil)
+		return
 	}
 
 	resp, err := h.api.ListPayments(r.Context(), req)
@@ -579,7 +622,16 @@ func (h *httpServer) Charges(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
 	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "charges", chargeCSVHeader)
+			return
+		}
 		writeJSON(w, http.StatusOK, chargesJSON{Charges: []chargeJSON{}})
 		return
 	}
@@ -598,9 +650,33 @@ func (h *httpServer) Charges(w http.ResponseWriter, r *http.Request) {
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.Filter.AccountIds = intersect(ids, requested)
 		if len(req.Filter.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "charges", chargeCSVHeader)
+				return
+			}
 			writeJSON(w, http.StatusOK, chargesJSON{Charges: []chargeJSON{}})
 			return
 		}
+	}
+	if csvOut {
+		streamCSV(w, r, "charges", chargeCSVHeader, func(cursor string) ([][]string, string, error) {
+			req.Cursor = cursor
+			req.Limit = csvPageSize
+			resp, err := h.api.ListCharges(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			rows := make([][]string, 0, len(resp.GetCharges()))
+			for _, c := range resp.GetCharges() {
+				rows = append(rows, []string{
+					c.GetSessionId(), c.GetAccountId(),
+					strconv.FormatInt(c.GetChargedSeconds(), 10), strconv.FormatInt(c.GetAmountMinor(), 10),
+					strconv.FormatInt(c.GetBalanceAfter(), 10), strconv.FormatInt(c.GetLastChargedAtMs(), 10),
+				})
+			}
+			return rows, resp.GetNextCursor(), nil
+		}, nil)
+		return
 	}
 
 	resp, err := h.api.ListCharges(r.Context(), req)
@@ -631,7 +707,16 @@ func (h *httpServer) LowBalance(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, code, err.Error())
 		return
 	}
+	csvOut, ok := csvRequested(r)
+	if !ok {
+		writeErr(w, http.StatusBadRequest, "invalid format")
+		return
+	}
 	if len(ids) == 0 {
+		if csvOut {
+			writeCSVHeaderOnly(w, "low-balance", balanceCSVHeader)
+			return
+		}
 		writeJSON(w, http.StatusOK, lowBalanceJSON{Accounts: []balanceJSON{}})
 		return
 	}
@@ -655,9 +740,32 @@ func (h *httpServer) LowBalance(w http.ResponseWriter, r *http.Request) {
 	if requested := q["account_id"]; len(requested) > 0 {
 		req.AccountIds = intersect(ids, requested)
 		if len(req.AccountIds) == 0 {
+			if csvOut {
+				writeCSVHeaderOnly(w, "low-balance", balanceCSVHeader)
+				return
+			}
 			writeJSON(w, http.StatusOK, lowBalanceJSON{Accounts: []balanceJSON{}})
 			return
 		}
+	}
+	if csvOut {
+		streamCSV(w, r, "low-balance", balanceCSVHeader, func(cursor string) ([][]string, string, error) {
+			req.Cursor = cursor
+			req.Limit = csvPageSize
+			resp, err := h.api.ListLowBalance(r.Context(), req)
+			if err != nil {
+				return nil, "", err
+			}
+			rows := make([][]string, 0, len(resp.GetAccounts()))
+			for _, a := range resp.GetAccounts() {
+				rows = append(rows, []string{
+					a.GetAccountId(), a.GetKind(), strconv.FormatInt(a.GetBalance(), 10),
+					strconv.FormatInt(a.GetCreditLimit(), 10), a.GetCurrency(),
+				})
+			}
+			return rows, resp.GetNextCursor(), nil
+		}, nil)
+		return
 	}
 
 	resp, err := h.api.ListLowBalance(r.Context(), req)

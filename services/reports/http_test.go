@@ -382,3 +382,51 @@ func TestHTTPCSVCap(t *testing.T) {
 		t.Fatalf("fetched %d pages, want 10", len(api.fetched))
 	}
 }
+
+func TestHTTPCSVMoneyReports(t *testing.T) {
+	srv := facade(t)
+	q := "from=2026-11-17&to=2026-11-18"
+
+	code, _, body := getRaw(t, srv.URL+"/reports/payments?"+q+"&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("payments = %d (%s)", code, body)
+	}
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 2 || lines[0] != "payment_id,event_id,account_id,gateway,amount_minor,status,created_at_ms" {
+		t.Fatalf("payments lines = %q", lines)
+	}
+	if lines[1] != "7,evt,a1,stripe,500,recorded,1000" {
+		t.Fatalf("payments row = %q", lines[1])
+	}
+
+	code, _, body = getRaw(t, srv.URL+"/reports/charges?"+q+"&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("charges = %d (%s)", code, body)
+	}
+	lines = strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 2 || lines[0] != "session_id,account_id,charged_seconds,amount_minor,balance_after,last_charged_at_ms" {
+		t.Fatalf("charges lines = %q", lines)
+	}
+	if lines[1] != "s1,a1,3,-4,996,2000" {
+		t.Fatalf("charges row = %q", lines[1])
+	}
+
+	code, _, body = getRaw(t, srv.URL+"/reports/low-balance?threshold=-5&format=csv", "reseller")
+	if code != http.StatusOK {
+		t.Fatalf("low balance = %d (%s)", code, body)
+	}
+	lines = strings.Split(strings.TrimSpace(body), "\n")
+	if len(lines) != 2 || lines[0] != "account_id,kind,balance,credit_limit,currency" {
+		t.Fatalf("low balance lines = %q", lines)
+	}
+	if lines[1] != "a1,prepaid,0,0,ZAR" {
+		t.Fatalf("low balance row = %q", lines[1])
+	}
+
+	if code, _, _ := getRaw(t, srv.URL+"/reports/payments?"+q+"&format=bogus", "reseller"); code != http.StatusBadRequest {
+		t.Fatalf("bogus format = %d, want 400", code)
+	}
+	if code, _, _ := getRaw(t, srv.URL+"/reports/charges?"+q+"&format=csv", "user"); code != http.StatusForbidden {
+		t.Fatalf("user csv = %d, want 403", code)
+	}
+}
