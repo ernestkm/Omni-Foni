@@ -16,7 +16,9 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	cataloguepb "omnifoni/catalogue/gen/cataloguepb"
+	chargingpb "omnifoni/charging/gen/chargingpb"
 	"omnifoni/observability"
+	paymentspb "omnifoni/payments/gen/paymentspb"
 	pb "omnifoni/reports/gen/reportspb"
 )
 
@@ -36,6 +38,8 @@ func main() {
 	identity := env("REPORTS_IDENTITY_ADDR", "http://identity:50056")
 	addr := env("REPORTS_ADDR", ":50061")
 	httpAddr := env("REPORTS_HTTP_ADDR", ":50062")
+	payAddr := env("REPORTS_PAYMENTS_ADDR", "payments:50060")
+	chgAddr := env("REPORTS_CHARGING_ADDR", "charging:50051")
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -65,6 +69,20 @@ func main() {
 		slog.Error("catalogue client", "err", err)
 		os.Exit(1)
 	}
+	payConn, err := grpc.NewClient(payAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
+	if err != nil {
+		slog.Error("payments client", "err", err)
+		os.Exit(1)
+	}
+	chgConn, err := grpc.NewClient(chgAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
+	if err != nil {
+		slog.Error("charging client", "err", err)
+		os.Exit(1)
+	}
 	cons, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
@@ -80,7 +98,11 @@ func main() {
 	defer cons.Close()
 	go Run(ctx, cons, NewIngester(store, cataloguepb.NewCatalogueClient(catConn)))
 
-	api := &reportsServer{store: store}
+	api := &reportsServer{
+		store:    store,
+		payments: paymentspb.NewPaymentsClient(payConn),
+		charges:  chargingpb.NewChargingClient(chgConn),
+	}
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		slog.Error("listen failed", "err", err)
@@ -121,7 +143,8 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
-	slog.Info("reports HTTP up", "addr", httpAddr, "identity", identity)
+	slog.Info("reports HTTP up", "addr", httpAddr, "identity", identity,
+		"payments", payAddr, "charging", chgAddr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("http serve failed", "err", err)
 		os.Exit(1)

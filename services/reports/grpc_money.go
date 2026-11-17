@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -17,13 +18,13 @@ import (
 
 // PaymentSource is the payments read surface used by the report handlers.
 type PaymentSource interface {
-	ListPayments(context.Context, *paymentspb.ListPaymentsRequest) (*paymentspb.ListPaymentsResponse, error)
+	ListPayments(context.Context, *paymentspb.ListPaymentsRequest, ...grpc.CallOption) (*paymentspb.ListPaymentsResponse, error)
 }
 
 // ChargeSource is the charging read surface used by the report handlers.
 type ChargeSource interface {
-	ListCharges(context.Context, *chargingpb.ListChargesRequest) (*chargingpb.ListChargesResponse, error)
-	ListLowBalance(context.Context, *chargingpb.ListLowBalanceRequest) (*chargingpb.ListLowBalanceResponse, error)
+	ListCharges(context.Context, *chargingpb.ListChargesRequest, ...grpc.CallOption) (*chargingpb.ListChargesResponse, error)
+	ListLowBalance(context.Context, *chargingpb.ListLowBalanceRequest, ...grpc.CallOption) (*chargingpb.ListLowBalanceResponse, error)
 }
 
 func parseMoneyFilter(f *pb.MoneyFilter) (from, to time.Time, err error) {

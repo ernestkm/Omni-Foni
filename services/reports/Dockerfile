@@ -3,6 +3,8 @@ WORKDIR /src
 COPY observability/ ./observability/
 COPY catalogue/ ./catalogue/
 COPY mediation/ ./mediation/
+COPY payments/ ./payments/
+COPY charging/ ./charging/
 COPY reports/ ./reports/
 RUN cd reports && CGO_ENABLED=0 go build -o /reports .
 

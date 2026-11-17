@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -18,7 +19,7 @@ type fakePayments struct {
 	err  error
 }
 
-func (f *fakePayments) ListPayments(_ context.Context, req *paymentspb.ListPaymentsRequest) (*paymentspb.ListPaymentsResponse, error) {
+func (f *fakePayments) ListPayments(_ context.Context, req *paymentspb.ListPaymentsRequest, _ ...grpc.CallOption) (*paymentspb.ListPaymentsResponse, error) {
 	f.req = req
 	if f.err != nil {
 		return nil, f.err
@@ -34,7 +35,7 @@ type fakeCharges struct {
 	err        error
 }
 
-func (f *fakeCharges) ListCharges(_ context.Context, req *chargingpb.ListChargesRequest) (*chargingpb.ListChargesResponse, error) {
+func (f *fakeCharges) ListCharges(_ context.Context, req *chargingpb.ListChargesRequest, _ ...grpc.CallOption) (*chargingpb.ListChargesResponse, error) {
 	f.chargesReq = req
 	if f.err != nil {
 		return nil, f.err
@@ -42,7 +43,7 @@ func (f *fakeCharges) ListCharges(_ context.Context, req *chargingpb.ListCharges
 	return f.resp, nil
 }
 
-func (f *fakeCharges) ListLowBalance(_ context.Context, req *chargingpb.ListLowBalanceRequest) (*chargingpb.ListLowBalanceResponse, error) {
+func (f *fakeCharges) ListLowBalance(_ context.Context, req *chargingpb.ListLowBalanceRequest, _ ...grpc.CallOption) (*chargingpb.ListLowBalanceResponse, error) {
 	f.balanceReq = req
 	if f.err != nil {
 		return nil, f.err

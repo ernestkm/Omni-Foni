@@ -39,5 +39,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "summarize:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("ok: reports summary rows=%d\n", len(resp.GetRows()))
+	if _, err := pb.NewReportsClient(conn).ListLowBalance(ctx, &pb.LowBalanceRequest{ThresholdMinor: 0}); err != nil {
+		fmt.Fprintln(os.Stderr, "low balance:", err)
+		os.Exit(1)
+	}
+	fmt.Printf("ok: reports summary rows=%d money=ok\n", len(resp.GetRows()))
 }
