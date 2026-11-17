@@ -20,6 +20,7 @@ import (
 	"omnifoni/observability"
 	paymentspb "omnifoni/payments/gen/paymentspb"
 	pb "omnifoni/reports/gen/reportspb"
+	switchingpb "omnifoni/switching/gen/switchingpb"
 )
 
 func env(key, def string) string {
@@ -40,6 +41,7 @@ func main() {
 	httpAddr := env("REPORTS_HTTP_ADDR", ":50062")
 	payAddr := env("REPORTS_PAYMENTS_ADDR", "payments:50060")
 	chgAddr := env("REPORTS_CHARGING_ADDR", "charging:50051")
+	swAddr := env("REPORTS_SWITCHING_ADDR", "switching:50052")
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -83,6 +85,13 @@ func main() {
 		slog.Error("charging client", "err", err)
 		os.Exit(1)
 	}
+	swConn, err := grpc.NewClient(swAddr, append([]grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, observability.ClientOptions()...)...)
+	if err != nil {
+		slog.Error("switching client", "err", err)
+		os.Exit(1)
+	}
 	cons, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup(group),
@@ -102,6 +111,7 @@ func main() {
 		store:    store,
 		payments: paymentspb.NewPaymentsClient(payConn),
 		charges:  chargingpb.NewChargingClient(chgConn),
+		live:     switchingpb.NewSwitchingClient(swConn),
 	}
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -144,7 +154,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 	slog.Info("reports HTTP up", "addr", httpAddr, "identity", identity,
-		"payments", payAddr, "charging", chgAddr)
+		"payments", payAddr, "charging", chgAddr, "switching", swAddr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("http serve failed", "err", err)
 		os.Exit(1)

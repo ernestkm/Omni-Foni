@@ -22,6 +22,7 @@ type reportsServer struct {
 	store    *Store
 	payments PaymentSource
 	charges  ChargeSource
+	live     LiveCallSource
 }
 
 const (

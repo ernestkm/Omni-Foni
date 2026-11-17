@@ -265,6 +265,7 @@ services:
       REPORTS_IDENTITY_ADDR: http://identity:50056
       REPORTS_PAYMENTS_ADDR: payments:50060
       REPORTS_CHARGING_ADDR: charging:50051
+      REPORTS_SWITCHING_ADDR: switching:50052
       REPORTS_ADDR: ":50061"
       REPORTS_HTTP_ADDR: ":50062"
       REPORTS_REFLECTION: "1"
@@ -285,6 +286,8 @@ services:
       payments:
         condition: service_started
       charging:
+        condition: service_started
+      switching:
         condition: service_started
 
 volumes:

@@ -1251,6 +1251,210 @@ func (x *LowBalanceResponse) GetNextCursor() string {
 	return ""
 }
 
+type LiveCallsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountIds    []string               `protobuf:"bytes,1,rep,name=account_ids,json=accountIds,proto3" json:"account_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LiveCallsRequest) Reset() {
+	*x = LiveCallsRequest{}
+	mi := &file_reports_v1_reports_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveCallsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveCallsRequest) ProtoMessage() {}
+
+func (x *LiveCallsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveCallsRequest.ProtoReflect.Descriptor instead.
+func (*LiveCallsRequest) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *LiveCallsRequest) GetAccountIds() []string {
+	if x != nil {
+		return x.AccountIds
+	}
+	return nil
+}
+
+type LiveCall struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CallId         string                 `protobuf:"bytes,1,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	SessionId      string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	AccountId      string                 `protobuf:"bytes,3,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
+	Destination    string                 `protobuf:"bytes,4,opt,name=destination,proto3" json:"destination,omitempty"`
+	Cli            string                 `protobuf:"bytes,5,opt,name=cli,proto3" json:"cli,omitempty"`
+	TrunkId        string                 `protobuf:"bytes,6,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`
+	StartedAtMs    int64                  `protobuf:"varint,7,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	ElapsedSeconds int64                  `protobuf:"varint,8,opt,name=elapsed_seconds,json=elapsedSeconds,proto3" json:"elapsed_seconds,omitempty"`
+	MaxSeconds     int64                  `protobuf:"varint,9,opt,name=max_seconds,json=maxSeconds,proto3" json:"max_seconds,omitempty"`
+	ChargedSeconds int64                  `protobuf:"varint,10,opt,name=charged_seconds,json=chargedSeconds,proto3" json:"charged_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LiveCall) Reset() {
+	*x = LiveCall{}
+	mi := &file_reports_v1_reports_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveCall) ProtoMessage() {}
+
+func (x *LiveCall) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveCall.ProtoReflect.Descriptor instead.
+func (*LiveCall) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *LiveCall) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetDestination() string {
+	if x != nil {
+		return x.Destination
+	}
+	return ""
+}
+
+func (x *LiveCall) GetCli() string {
+	if x != nil {
+		return x.Cli
+	}
+	return ""
+}
+
+func (x *LiveCall) GetTrunkId() string {
+	if x != nil {
+		return x.TrunkId
+	}
+	return ""
+}
+
+func (x *LiveCall) GetStartedAtMs() int64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
+func (x *LiveCall) GetElapsedSeconds() int64 {
+	if x != nil {
+		return x.ElapsedSeconds
+	}
+	return 0
+}
+
+func (x *LiveCall) GetMaxSeconds() int64 {
+	if x != nil {
+		return x.MaxSeconds
+	}
+	return 0
+}
+
+func (x *LiveCall) GetChargedSeconds() int64 {
+	if x != nil {
+		return x.ChargedSeconds
+	}
+	return 0
+}
+
+type LiveCallsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Calls         []*LiveCall            `protobuf:"bytes,1,rep,name=calls,proto3" json:"calls,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LiveCallsResponse) Reset() {
+	*x = LiveCallsResponse{}
+	mi := &file_reports_v1_reports_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LiveCallsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LiveCallsResponse) ProtoMessage() {}
+
+func (x *LiveCallsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_reports_v1_reports_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LiveCallsResponse.ProtoReflect.Descriptor instead.
+func (*LiveCallsResponse) Descriptor() ([]byte, []int) {
+	return file_reports_v1_reports_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *LiveCallsResponse) GetCalls() []*LiveCall {
+	if x != nil {
+		return x.Calls
+	}
+	return nil
+}
+
 var File_reports_v1_reports_proto protoreflect.FileDescriptor
 
 const file_reports_v1_reports_proto_rawDesc = "" +
@@ -1363,7 +1567,27 @@ const file_reports_v1_reports_proto_rawDesc = "" +
 	"\x12LowBalanceResponse\x122\n" +
 	"\baccounts\x18\x01 \x03(\v2\x16.reports.v1.BalanceRowR\baccounts\x12\x1f\n" +
 	"\vnext_cursor\x18\x02 \x01(\tR\n" +
-	"nextCursor*a\n" +
+	"nextCursor\"3\n" +
+	"\x10LiveCallsRequest\x12\x1f\n" +
+	"\vaccount_ids\x18\x01 \x03(\tR\n" +
+	"accountIds\"\xc7\x02\n" +
+	"\bLiveCall\x12\x17\n" +
+	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x03 \x01(\tR\taccountId\x12 \n" +
+	"\vdestination\x18\x04 \x01(\tR\vdestination\x12\x10\n" +
+	"\x03cli\x18\x05 \x01(\tR\x03cli\x12\x19\n" +
+	"\btrunk_id\x18\x06 \x01(\tR\atrunkId\x12\"\n" +
+	"\rstarted_at_ms\x18\a \x01(\x03R\vstartedAtMs\x12'\n" +
+	"\x0felapsed_seconds\x18\b \x01(\x03R\x0eelapsedSeconds\x12\x1f\n" +
+	"\vmax_seconds\x18\t \x01(\x03R\n" +
+	"maxSeconds\x12'\n" +
+	"\x0fcharged_seconds\x18\n" +
+	" \x01(\x03R\x0echargedSeconds\"?\n" +
+	"\x11LiveCallsResponse\x12*\n" +
+	"\x05calls\x18\x01 \x03(\v2\x14.reports.v1.LiveCallR\x05calls*a\n" +
 	"\aGroupBy\x12\x18\n" +
 	"\x14GROUP_BY_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03DAY\x10\x01\x12\x0f\n" +
@@ -1371,13 +1595,14 @@ const file_reports_v1_reports_proto_rawDesc = "" +
 	"\aACCOUNT\x10\x03\x12\t\n" +
 	"\x05TRUNK\x10\x04\x12\n" +
 	"\n" +
-	"\x06PREFIX\x10\x052\x8e\x03\n" +
+	"\x06PREFIX\x10\x052\xdc\x03\n" +
 	"\aReports\x12E\n" +
 	"\bListCdrs\x12\x1b.reports.v1.ListCdrsRequest\x1a\x1c.reports.v1.ListCdrsResponse\x12H\n" +
 	"\tSummarize\x12\x1c.reports.v1.SummarizeRequest\x1a\x1d.reports.v1.SummarizeResponse\x12Q\n" +
 	"\fListPayments\x12\x1f.reports.v1.ListPaymentsRequest\x1a .reports.v1.ListPaymentsResponse\x12N\n" +
 	"\vListCharges\x12\x1e.reports.v1.ListChargesRequest\x1a\x1f.reports.v1.ListChargesResponse\x12O\n" +
-	"\x0eListLowBalance\x12\x1d.reports.v1.LowBalanceRequest\x1a\x1e.reports.v1.LowBalanceResponseB Z\x1eomnifoni/reports/gen/reportspbb\x06proto3"
+	"\x0eListLowBalance\x12\x1d.reports.v1.LowBalanceRequest\x1a\x1e.reports.v1.LowBalanceResponse\x12L\n" +
+	"\rListLiveCalls\x12\x1c.reports.v1.LiveCallsRequest\x1a\x1d.reports.v1.LiveCallsResponseB Z\x1eomnifoni/reports/gen/reportspbb\x06proto3"
 
 var (
 	file_reports_v1_reports_proto_rawDescOnce sync.Once
@@ -1392,7 +1617,7 @@ func file_reports_v1_reports_proto_rawDescGZIP() []byte {
 }
 
 var file_reports_v1_reports_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_reports_v1_reports_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_reports_v1_reports_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_reports_v1_reports_proto_goTypes = []any{
 	(GroupBy)(0),                 // 0: reports.v1.GroupBy
 	(*CdrFilter)(nil),            // 1: reports.v1.CdrFilter
@@ -1412,6 +1637,9 @@ var file_reports_v1_reports_proto_goTypes = []any{
 	(*LowBalanceRequest)(nil),    // 15: reports.v1.LowBalanceRequest
 	(*BalanceRow)(nil),           // 16: reports.v1.BalanceRow
 	(*LowBalanceResponse)(nil),   // 17: reports.v1.LowBalanceResponse
+	(*LiveCallsRequest)(nil),     // 18: reports.v1.LiveCallsRequest
+	(*LiveCall)(nil),             // 19: reports.v1.LiveCall
+	(*LiveCallsResponse)(nil),    // 20: reports.v1.LiveCallsResponse
 }
 var file_reports_v1_reports_proto_depIdxs = []int32{
 	1,  // 0: reports.v1.ListCdrsRequest.filter:type_name -> reports.v1.CdrFilter
@@ -1425,21 +1653,24 @@ var file_reports_v1_reports_proto_depIdxs = []int32{
 	8,  // 8: reports.v1.ListChargesRequest.filter:type_name -> reports.v1.MoneyFilter
 	13, // 9: reports.v1.ListChargesResponse.charges:type_name -> reports.v1.Charge
 	16, // 10: reports.v1.LowBalanceResponse.accounts:type_name -> reports.v1.BalanceRow
-	2,  // 11: reports.v1.Reports.ListCdrs:input_type -> reports.v1.ListCdrsRequest
-	5,  // 12: reports.v1.Reports.Summarize:input_type -> reports.v1.SummarizeRequest
-	9,  // 13: reports.v1.Reports.ListPayments:input_type -> reports.v1.ListPaymentsRequest
-	12, // 14: reports.v1.Reports.ListCharges:input_type -> reports.v1.ListChargesRequest
-	15, // 15: reports.v1.Reports.ListLowBalance:input_type -> reports.v1.LowBalanceRequest
-	4,  // 16: reports.v1.Reports.ListCdrs:output_type -> reports.v1.ListCdrsResponse
-	7,  // 17: reports.v1.Reports.Summarize:output_type -> reports.v1.SummarizeResponse
-	11, // 18: reports.v1.Reports.ListPayments:output_type -> reports.v1.ListPaymentsResponse
-	14, // 19: reports.v1.Reports.ListCharges:output_type -> reports.v1.ListChargesResponse
-	17, // 20: reports.v1.Reports.ListLowBalance:output_type -> reports.v1.LowBalanceResponse
-	16, // [16:21] is the sub-list for method output_type
-	11, // [11:16] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	19, // 11: reports.v1.LiveCallsResponse.calls:type_name -> reports.v1.LiveCall
+	2,  // 12: reports.v1.Reports.ListCdrs:input_type -> reports.v1.ListCdrsRequest
+	5,  // 13: reports.v1.Reports.Summarize:input_type -> reports.v1.SummarizeRequest
+	9,  // 14: reports.v1.Reports.ListPayments:input_type -> reports.v1.ListPaymentsRequest
+	12, // 15: reports.v1.Reports.ListCharges:input_type -> reports.v1.ListChargesRequest
+	15, // 16: reports.v1.Reports.ListLowBalance:input_type -> reports.v1.LowBalanceRequest
+	18, // 17: reports.v1.Reports.ListLiveCalls:input_type -> reports.v1.LiveCallsRequest
+	4,  // 18: reports.v1.Reports.ListCdrs:output_type -> reports.v1.ListCdrsResponse
+	7,  // 19: reports.v1.Reports.Summarize:output_type -> reports.v1.SummarizeResponse
+	11, // 20: reports.v1.Reports.ListPayments:output_type -> reports.v1.ListPaymentsResponse
+	14, // 21: reports.v1.Reports.ListCharges:output_type -> reports.v1.ListChargesResponse
+	17, // 22: reports.v1.Reports.ListLowBalance:output_type -> reports.v1.LowBalanceResponse
+	20, // 23: reports.v1.Reports.ListLiveCalls:output_type -> reports.v1.LiveCallsResponse
+	18, // [18:24] is the sub-list for method output_type
+	12, // [12:18] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_reports_v1_reports_proto_init() }
@@ -1453,7 +1684,7 @@ func file_reports_v1_reports_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_reports_v1_reports_proto_rawDesc), len(file_reports_v1_reports_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   17,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

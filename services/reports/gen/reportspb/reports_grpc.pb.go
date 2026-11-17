@@ -24,6 +24,7 @@ const (
 	Reports_ListPayments_FullMethodName   = "/reports.v1.Reports/ListPayments"
 	Reports_ListCharges_FullMethodName    = "/reports.v1.Reports/ListCharges"
 	Reports_ListLowBalance_FullMethodName = "/reports.v1.Reports/ListLowBalance"
+	Reports_ListLiveCalls_FullMethodName  = "/reports.v1.Reports/ListLiveCalls"
 )
 
 // ReportsClient is the client API for Reports service.
@@ -38,6 +39,7 @@ type ReportsClient interface {
 	ListPayments(ctx context.Context, in *ListPaymentsRequest, opts ...grpc.CallOption) (*ListPaymentsResponse, error)
 	ListCharges(ctx context.Context, in *ListChargesRequest, opts ...grpc.CallOption) (*ListChargesResponse, error)
 	ListLowBalance(ctx context.Context, in *LowBalanceRequest, opts ...grpc.CallOption) (*LowBalanceResponse, error)
+	ListLiveCalls(ctx context.Context, in *LiveCallsRequest, opts ...grpc.CallOption) (*LiveCallsResponse, error)
 }
 
 type reportsClient struct {
@@ -98,6 +100,16 @@ func (c *reportsClient) ListLowBalance(ctx context.Context, in *LowBalanceReques
 	return out, nil
 }
 
+func (c *reportsClient) ListLiveCalls(ctx context.Context, in *LiveCallsRequest, opts ...grpc.CallOption) (*LiveCallsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LiveCallsResponse)
+	err := c.cc.Invoke(ctx, Reports_ListLiveCalls_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReportsServer is the server API for Reports service.
 // All implementations must embed UnimplementedReportsServer
 // for forward compatibility.
@@ -110,6 +122,7 @@ type ReportsServer interface {
 	ListPayments(context.Context, *ListPaymentsRequest) (*ListPaymentsResponse, error)
 	ListCharges(context.Context, *ListChargesRequest) (*ListChargesResponse, error)
 	ListLowBalance(context.Context, *LowBalanceRequest) (*LowBalanceResponse, error)
+	ListLiveCalls(context.Context, *LiveCallsRequest) (*LiveCallsResponse, error)
 	mustEmbedUnimplementedReportsServer()
 }
 
@@ -134,6 +147,9 @@ func (UnimplementedReportsServer) ListCharges(context.Context, *ListChargesReque
 }
 func (UnimplementedReportsServer) ListLowBalance(context.Context, *LowBalanceRequest) (*LowBalanceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListLowBalance not implemented")
+}
+func (UnimplementedReportsServer) ListLiveCalls(context.Context, *LiveCallsRequest) (*LiveCallsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListLiveCalls not implemented")
 }
 func (UnimplementedReportsServer) mustEmbedUnimplementedReportsServer() {}
 func (UnimplementedReportsServer) testEmbeddedByValue()                 {}
@@ -246,6 +262,24 @@ func _Reports_ListLowBalance_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Reports_ListLiveCalls_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LiveCallsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReportsServer).ListLiveCalls(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Reports_ListLiveCalls_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReportsServer).ListLiveCalls(ctx, req.(*LiveCallsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Reports_ServiceDesc is the grpc.ServiceDesc for Reports service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -272,6 +306,10 @@ var Reports_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListLowBalance",
 			Handler:    _Reports_ListLowBalance_Handler,
+		},
+		{
+			MethodName: "ListLiveCalls",
+			Handler:    _Reports_ListLiveCalls_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

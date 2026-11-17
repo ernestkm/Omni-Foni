@@ -5,6 +5,9 @@ COPY catalogue/ ./catalogue/
 COPY mediation/ ./mediation/
 COPY payments/ ./payments/
 COPY charging/ ./charging/
+COPY switching/ ./switching/
+COPY routing/ ./routing/
+COPY sbc/ ./sbc/
 COPY reports/ ./reports/
 RUN cd reports && CGO_ENABLED=0 go build -o /reports .
 

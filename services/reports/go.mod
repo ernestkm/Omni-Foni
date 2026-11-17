@@ -23,6 +23,7 @@ require (
 	omnifoni/mediation v0.0.0-00010101000000-000000000000
 	omnifoni/observability v0.0.0-00010101000000-000000000000
 	omnifoni/payments v0.0.0-00010101000000-000000000000
+	omnifoni/switching v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -59,3 +60,9 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
 )
+
+replace omnifoni/switching => ../switching
+
+replace omnifoni/routing => ../routing
+
+replace omnifoni/sbc => ../sbc
