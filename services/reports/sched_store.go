@@ -162,6 +162,8 @@ func (s *SchedStore) InsertArtifact(ctx context.Context, a Artifact) (Artifact, 
 	return out, true, nil
 }
 
+// ListArtifacts returns artifact metadata without CSV bodies; callers that
+// need the body use GetArtifact.
 func (s *SchedStore) ListArtifacts(ctx context.Context, scheduleID string) ([]Artifact, error) {
 	rows, err := s.pool.Query(ctx, `SELECT artifact_id, schedule_id, slot_key, period_from,
 		period_to, row_count, created_at FROM report_artifacts

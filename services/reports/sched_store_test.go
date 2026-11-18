@@ -87,9 +87,10 @@ func TestSchedStoreArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	from := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	const body = "destination,amount\n2782000,10\n"
 	a1, inserted, err := schedDB.InsertArtifact(ctx, Artifact{
 		ScheduleID: sch.ScheduleID, SlotKey: "2026-11-17T06:30Z",
-		PeriodFrom: from, PeriodTo: from.Add(24 * time.Hour), RowCount: 2,
+		PeriodFrom: from, PeriodTo: from.Add(24 * time.Hour), RowCount: 2, CSVBody: body,
 	})
 	if err != nil || !inserted {
 		t.Fatalf("insert = %+v, %v, %v", a1, inserted, err)
@@ -108,8 +109,18 @@ func TestSchedStoreArtifacts(t *testing.T) {
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list = %v, %v", list, err)
 	}
-	if _, _, err := schedDB.GetArtifact(ctx, sch.ScheduleID, a1.ArtifactID); err != nil {
+	if list[0].RowCount != 2 {
+		t.Fatalf("surviving row_count = %d, want 2", list[0].RowCount)
+	}
+	got, gotBody, err := schedDB.GetArtifact(ctx, sch.ScheduleID, a1.ArtifactID)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if got.RowCount != 2 {
+		t.Fatalf("surviving row_count = %d, want 2", got.RowCount)
+	}
+	if gotBody != body {
+		t.Fatalf("body = %q, want %q", gotBody, body)
 	}
 	if _, _, err := schedDB.GetArtifact(ctx, sch.ScheduleID, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("cross-artifact err = %v", err)
@@ -136,6 +147,12 @@ func TestSchedStoreCascadeAndPrune(t *testing.T) {
 	n, err := schedDB.PruneArtifacts(ctx, time.Now().AddDate(0, 0, -90))
 	if err != nil || n != 1 {
 		t.Fatalf("prune = %d, %v", n, err)
+	}
+	if _, _, err := schedDB.InsertArtifact(ctx, Artifact{
+		ScheduleID: sch.ScheduleID, SlotKey: "fresh", PeriodFrom: time.Now().Add(-time.Hour),
+		PeriodTo: time.Now(), RowCount: 1,
+	}); err != nil {
+		t.Fatal(err)
 	}
 	if err := schedDB.DeleteSchedule(ctx, sch.ScheduleID); err != nil {
 		t.Fatal(err)

@@ -34,12 +34,13 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "sched db:", err)
 		os.Exit(1)
 	}
-	defer schedDB.Close()
 	if err := schedDB.Migrate(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "sched migrate:", err)
 		os.Exit(1)
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	schedDB.Close()
+	os.Exit(code)
 }
 
 func schedTestDSN() string {
