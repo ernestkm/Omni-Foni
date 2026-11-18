@@ -121,7 +121,7 @@ func validateSchedule(in Schedule, allowed []string) (Schedule, error) {
 	if len(in.AccountIDs) > maxScheduleAccounts {
 		return in, fmt.Errorf("account_ids exceeds %d", maxScheduleAccounts)
 	}
-	if len(in.AccountIDs) > 0 && len(allowed) > 0 {
+	if len(in.AccountIDs) > 0 {
 		kept := intersect(allowed, in.AccountIDs)
 		if len(kept) == 0 {
 			return in, errors.New("no matching accounts")
@@ -250,6 +250,9 @@ func (h *httpServer) GetSchedule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, scheduleJSON(sch))
 }
 
+// PatchSchedule replaces the mutable fields of a schedule; it is not a merge.
+// Omitted fields take their defaults (group_by=none, prefix_len=3, enabled=true,
+// account_ids=[]), so a partial body that omits a required field is rejected.
 func (h *httpServer) PatchSchedule(w http.ResponseWriter, r *http.Request) {
 	if !h.requireSched(w) {
 		return
@@ -285,7 +288,12 @@ func (h *httpServer) PatchSchedule(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusServiceUnavailable, "schedule_unavailable")
 		return
 	}
-	writeJSON(w, http.StatusOK, scheduleJSON(sch))
+	updated, err := h.sched.store.GetSchedule(r.Context(), sch.ScheduleID)
+	if err != nil {
+		writeErr(w, http.StatusServiceUnavailable, "schedule_unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, scheduleJSON(updated))
 }
 
 func (h *httpServer) DeleteSchedule(w http.ResponseWriter, r *http.Request) {

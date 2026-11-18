@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func schedFacade(t *testing.T) *httptest.Server {
@@ -100,6 +103,12 @@ func TestSchedHTTPLifecycle(t *testing.T) {
 	if code != http.StatusOK || one["report_kind"] != "cdrs" || one["tenant_id"] != "t1" {
 		t.Fatalf("get = %d %v", code, one)
 	}
+	if one["created_by"] != "u2" {
+		t.Fatalf("created_by = %v, want caller user id u2", one["created_by"])
+	}
+	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/not-a-uuid", "reseller", ""); code != http.StatusNotFound {
+		t.Fatalf("malformed schedule id = %d, want 404", code)
+	}
 	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id, "admin", ""); code != http.StatusBadRequest {
 		// admin without tenant_id still needs it
 		t.Fatalf("admin get without tenant = %d", code)
@@ -160,6 +169,17 @@ func TestSchedHTTPLifecycle(t *testing.T) {
 		!strings.Contains(cd, "reports-scheduled-") {
 		t.Fatalf("content-disposition = %q", cd)
 	}
+	gotBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, wantBody, err := schedDB.GetArtifact(context.Background(), id, aid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotBody) != wantBody {
+		t.Fatalf("download body = %q, want %q", gotBody, wantBody)
+	}
 	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id+"/artifacts/other/download", "reseller", ""); code != http.StatusNotFound {
 		t.Fatalf("foreign artifact = %d", code)
 	}
@@ -179,16 +199,130 @@ func TestSchedHTTPCrossTenant(t *testing.T) {
 	schedReset(t)
 	srv := schedFacade(t)
 	id := createSchedule(t, srv, "reseller", "", "cdrs") // tenant t1
-	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports?tenant_id=t2", "admin", ""); code != http.StatusOK {
-		t.Fatalf("admin t2 list = %d", code)
+
+	code, run := doJSON(t, http.MethodPost, srv.URL+"/scheduled-reports/"+id+"/run", "reseller", "")
+	if code != http.StatusAccepted {
+		t.Fatalf("run = %d %v", code, run)
 	}
-	// t2 is not t1: id-scoped access must 404.
-	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id, "admin", ""); code == http.StatusOK {
-		// admin without tenant_id is rejected before lookup; with tenant_id=t2 it must 404
-		_ = code
+	aid, _ := run["artifact_id"].(string)
+	if aid == "" {
+		t.Fatalf("no artifact_id: %v", run)
 	}
-	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id+"?tenant_id=t2", "admin", ""); code != http.StatusNotFound {
-		t.Fatalf("cross-tenant get = %d", code)
+
+	cases := []struct {
+		name, method, path, body string
+	}{
+		{"get", http.MethodGet, "/scheduled-reports/" + id + "?tenant_id=t2", ""},
+		{"artifacts", http.MethodGet, "/scheduled-reports/" + id + "/artifacts?tenant_id=t2", ""},
+		{"download", http.MethodGet, "/scheduled-reports/" + id + "/artifacts/" + aid + "/download?tenant_id=t2", ""},
+		{"patch", http.MethodPatch, "/scheduled-reports/" + id + "?tenant_id=t2", schedBody("cdrs")},
+		{"delete", http.MethodDelete, "/scheduled-reports/" + id + "?tenant_id=t2", ""},
+		{"run", http.MethodPost, "/scheduled-reports/" + id + "/run?tenant_id=t2", ""},
+	}
+	for _, tc := range cases {
+		if code, body := doJSON(t, tc.method, srv.URL+tc.path, "admin", tc.body); code != http.StatusNotFound {
+			t.Fatalf("cross-tenant %s = %d %v, want 404", tc.name, code, body)
+		}
+	}
+
+	// The foreign attempts must not have changed or removed the t1 schedule.
+	if code, body := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id, "reseller", ""); code != http.StatusOK {
+		t.Fatalf("owner get after cross-tenant attempts = %d %v", code, body)
+	}
+}
+
+func TestSchedHTTPAccountScopeFailsClosed(t *testing.T) {
+	schedReset(t)
+	srv := schedFacade(t)
+	// The "empty" identity is a reseller on tenant t3, which owns no accounts.
+	foreign := `{"report_kind":"cdrs","window_kind":"previous_month","frequency":"daily","at_hour":6,"at_minute":30,"account_ids":["a1"]}`
+	if code, body := doJSON(t, http.MethodPost, srv.URL+"/scheduled-reports", "empty", foreign); code != http.StatusBadRequest {
+		t.Fatalf("zero-account tenant create = %d %v, want 400", code, body)
+	}
+	if code, body := doJSON(t, http.MethodPost, srv.URL+"/scheduled-reports", "empty", schedBody("cdrs")); code != http.StatusCreated {
+		t.Fatalf("empty account_ids create = %d %v, want 201", code, body)
+	}
+}
+
+func TestSchedHTTPPatchReplacesFields(t *testing.T) {
+	schedReset(t)
+	srv := schedFacade(t)
+	id := createSchedule(t, srv, "reseller", "", "cdrs")
+
+	// PATCH is a replace, not a merge: omitted required fields are rejected.
+	if code, body := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller",
+		`{"enabled":false}`); code != http.StatusBadRequest {
+		t.Fatalf("partial patch = %d %v, want 400", code, body)
+	}
+
+	full := `{"report_kind":"summary","window_kind":"last_week","group_by":"prefix","prefix_len":5,` +
+		`"frequency":"monthly","at_hour":9,"at_minute":45,"day_of_month":20,"enabled":false,"account_ids":["a1"]}`
+	code, patched := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller", full)
+	if code != http.StatusOK {
+		t.Fatalf("full patch = %d %v", code, patched)
+	}
+	if patched["report_kind"] != "summary" || patched["window_kind"] != "last_week" ||
+		patched["group_by"] != "prefix" || patched["prefix_len"] != float64(5) ||
+		patched["frequency"] != "monthly" || patched["at_hour"] != float64(9) ||
+		patched["at_minute"] != float64(45) || patched["day_of_month"] != float64(20) ||
+		patched["enabled"] != false || patched["weekday"] != nil {
+		t.Fatalf("patched body = %v", patched)
+	}
+	if ids, _ := patched["account_ids"].([]any); len(ids) != 1 || ids[0] != "a1" {
+		t.Fatalf("patched account_ids = %v", patched["account_ids"])
+	}
+
+	// A later body that omits optional fields resets them to their defaults.
+	minimal := `{"report_kind":"cdrs","window_kind":"last_day","frequency":"daily","at_hour":0,"at_minute":0}`
+	code, reset := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller", minimal)
+	if code != http.StatusOK {
+		t.Fatalf("minimal patch = %d %v", code, reset)
+	}
+	if reset["group_by"] != "none" || reset["prefix_len"] != float64(3) ||
+		reset["enabled"] != true || reset["day_of_month"] != nil {
+		t.Fatalf("defaults not applied = %v", reset)
+	}
+	if ids, _ := reset["account_ids"].([]any); len(ids) != 0 {
+		t.Fatalf("account_ids not reset = %v", reset["account_ids"])
+	}
+}
+
+func TestSchedHTTPPatchReturnsFreshTimestamp(t *testing.T) {
+	schedReset(t)
+	srv := schedFacade(t)
+	id := createSchedule(t, srv, "reseller", "", "cdrs")
+
+	ctx := context.Background()
+	if _, err := schedDB.pool.Exec(ctx,
+		`UPDATE schedules SET updated_at = now() - interval '1 hour' WHERE schedule_id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	before, err := schedDB.GetSchedule(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, patched := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller", schedBody("cdrs"))
+	if code != http.StatusOK {
+		t.Fatalf("patch = %d %v", code, patched)
+	}
+	stamp, ok := patched["updated_at"].(string)
+	if !ok {
+		t.Fatalf("no updated_at: %v", patched)
+	}
+	got, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.After(before.UpdatedAt) {
+		t.Fatalf("updated_at = %v, want after %v", got, before.UpdatedAt)
+	}
+	stored, err := schedDB.GetSchedule(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stamp != stored.UpdatedAt.UTC().Format(time.RFC3339) {
+		t.Fatalf("response updated_at = %q, stored = %q", stamp, stored.UpdatedAt.UTC().Format(time.RFC3339))
 	}
 }
 
