@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -99,6 +100,14 @@ func TestFraudServerRejectsInvalidCursor(t *testing.T) {
 		if status.Code(err) != codes.InvalidArgument {
 			t.Fatalf("cursor %q: want InvalidArgument, got %v", cursor, err)
 		}
+	}
+}
+
+func TestUTCDayTruncatesToDate(t *testing.T) {
+	in := time.Date(2026, 11, 18, 23, 59, 59, 123, time.FixedZone("plus14", 14*60*60))
+	want := time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)
+	if got := utcDay(in); !got.Equal(want) {
+		t.Fatalf("got %v, want %v", got, want)
 	}
 }
 

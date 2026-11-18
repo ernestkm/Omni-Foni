@@ -49,7 +49,7 @@ func (s *Store) Reserve(ctx context.Context, req *fraudpb.CheckCallRequest, cfg 
 	destination := req.GetDestination()
 	prefix := DestinationPrefix(destination)
 	now := time.Now().UTC()
-	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	day := utcDay(now)
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -443,6 +443,11 @@ func encodeAlertCursor(alert *fraudpb.Alert) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
+func utcDay(t time.Time) time.Time {
+	t = t.UTC()
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
 func (s *Store) IngestCDR(ctx context.Context, c *mediationpb.CallCdr) error {
 	account := c.GetAccountId()
 	prefix := DestinationPrefix(c.GetDestination())
@@ -469,7 +474,7 @@ func (s *Store) IngestCDR(ctx context.Context, c *mediationpb.CallCdr) error {
 	}
 
 	usageAccount := account
-	usageDay := time.Now().UTC()
+	usageDay := utcDay(time.Now())
 	usagePrefix := prefix
 
 	var resAccount, resPrefix string
