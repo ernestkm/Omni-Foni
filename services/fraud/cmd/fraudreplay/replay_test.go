@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	fraudscore "omnifoni/fraud/scoring"
 )
@@ -38,5 +41,51 @@ func TestReplayBaseline(t *testing.T) {
 	}
 	if !strings.Contains(want, "recall: 0.750") {
 		t.Fatalf("missing expected recall in report: %s", want)
+	}
+}
+
+func TestReplayDetectedCasesUseDayScopedVelocity(t *testing.T) {
+	cfg := fraudscore.Config{AlertThreshold: 60, SoftAccountCalls: 5, SoftPrefixCalls: 2}
+	f, err := os.Open("../../testdata/fraud_cases.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var c testCase
+		if err := json.Unmarshal([]byte(line), &c); err != nil {
+			t.Fatal(err)
+		}
+		start, err := time.Parse(time.RFC3339, c.Start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		score, _ := fraudscore.Score(cfg, signalsFor(c, cfg, start))
+		if score < cfg.AlertThreshold {
+			continue
+		}
+		prefix := fraudscore.DestinationPrefix(c.Destination)
+		for _, h := range c.History {
+			if fraudscore.DestinationPrefix(h.Destination) != prefix || h.StartedAt == "" {
+				continue
+			}
+			at, err := time.Parse(time.RFC3339, h.StartedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			day := at.UTC().Format("2006-01-02")
+			startDay := start.UTC().Format("2006-01-02")
+			if day != startDay {
+				t.Fatalf("%s prefix history at %s is not on case day %s", c.AccountID, day, startDay)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
 	}
 }
