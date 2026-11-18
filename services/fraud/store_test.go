@@ -52,3 +52,21 @@ func TestMigrateCreatesFraudSchema(t *testing.T) {
 		t.Fatalf("cap = %d, want 3", cap)
 	}
 }
+
+func insertControl(t *testing.T, s *Store, account string, maxDay, maxPrefix *int, enabled bool) {
+	t.Helper()
+	_, err := s.pool.Exec(context.Background(),
+		`INSERT INTO fraud_controls(account_id, max_calls_per_day, max_calls_per_prefix_day, enabled)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (account_id) DO UPDATE SET
+		   max_calls_per_day = EXCLUDED.max_calls_per_day,
+		   max_calls_per_prefix_day = EXCLUDED.max_calls_per_prefix_day,
+		   enabled = EXCLUDED.enabled`, account, maxDay, maxPrefix, enabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func intPtr(n int) *int {
+	return &n
+}
