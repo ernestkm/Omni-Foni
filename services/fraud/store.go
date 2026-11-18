@@ -137,7 +137,7 @@ func (s *Store) Reserve(ctx context.Context, req *fraudpb.CheckCallRequest, cfg 
 			 VALUES ($1, $2, $3, $4)`, req.GetCallId(), account, day, prefix); err != nil {
 			return nil, nil, err
 		}
-		for _, p := range []string{"", prefix} {
+		for _, p := range usagePrefixes(prefix) {
 			if _, err := tx.Exec(ctx,
 				`INSERT INTO daily_usage(account_id, day, prefix, active)
 				 VALUES ($1, $2, $3, 1)
@@ -178,11 +178,7 @@ func (s *Store) EndCall(ctx context.Context, callID string) error {
 }
 
 func decrementActive(ctx context.Context, tx pgx.Tx, account string, day time.Time, prefix string) error {
-	prefixes := []string{""}
-	if prefix != "" {
-		prefixes = append(prefixes, prefix)
-	}
-	for _, p := range prefixes {
+	for _, p := range usagePrefixes(prefix) {
 		if _, err := tx.Exec(ctx,
 			`UPDATE daily_usage SET active = GREATEST(active - 1, 0)
 			 WHERE account_id = $1 AND day = $2::date AND prefix = $3`, account, day, p); err != nil {
@@ -190,6 +186,13 @@ func decrementActive(ctx context.Context, tx pgx.Tx, account string, day time.Ti
 		}
 	}
 	return nil
+}
+
+func usagePrefixes(prefix string) []string {
+	if prefix == "" {
+		return []string{""}
+	}
+	return []string{"", prefix}
 }
 
 func hardRule(blockedDestination, blockedCLI bool, maxDay, maxPrefix pgtype.Int4, accountCalls, prefixCalls int) string {

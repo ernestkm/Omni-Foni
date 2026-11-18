@@ -106,3 +106,39 @@ func TestAlertInsertedOnThreshold(t *testing.T) {
 		t.Fatalf("bad reasons: %v", alert.GetReasons())
 	}
 }
+
+func TestAlertsCallIDUnique(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	insert := func(account string) error {
+		_, err := s.pool.Exec(ctx,
+			`INSERT INTO alerts(call_id, account_id, risk_score, risk_level, reasons, rule_version)
+			 VALUES ('dup', $1, 100, 'high', '[]', 'v1')`, account)
+		return err
+	}
+	if err := insert("acc-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := insert("acc-b"); err == nil {
+		t.Fatal("duplicate alert call_id must fail")
+	}
+}
+
+func TestEmptyDestinationDoesNotDoubleCountUsage(t *testing.T) {
+	s := newTestStore(t)
+	cfg := Config{AlertThreshold: 101, SoftAccountCalls: 5, SoftPrefixCalls: 2}
+	insertControl(t, s, "acc-empty", intPtr(2), nil, true)
+
+	first, _ := reserveDirect(t, s, "e1", "acc-empty", "", "cli-a", cfg)
+	if !first.GetAllowed() {
+		t.Fatalf("first empty-destination call denied: %+v", first)
+	}
+	second, _ := reserveDirect(t, s, "e2", "acc-empty", "", "cli-b", cfg)
+	if !second.GetAllowed() {
+		t.Fatalf("second empty-destination call denied: %+v", second)
+	}
+	third, _ := reserveDirect(t, s, "e3", "acc-empty", "", "cli-c", cfg)
+	if third.GetAllowed() || third.GetReason() != "fraud_velocity_account" {
+		t.Fatalf("want velocity deny after two calls, got %+v", third)
+	}
+}

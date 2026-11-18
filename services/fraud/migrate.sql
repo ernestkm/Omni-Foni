@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS alerts (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS alerts_call_id_uidx
+  ON alerts (call_id);
 CREATE INDEX IF NOT EXISTS alerts_account_created_idx
   ON alerts (account_id, created_at DESC, alert_id DESC);
 CREATE INDEX IF NOT EXISTS processed_cdrs_account_cli_idx
