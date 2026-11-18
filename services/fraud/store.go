@@ -3,8 +3,12 @@ package main
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -314,9 +318,13 @@ func insertAlert(ctx context.Context, tx pgx.Tx, req *fraudpb.CheckCallRequest, 
 	err = tx.QueryRow(ctx,
 		`INSERT INTO alerts(call_id, account_id, risk_score, risk_level, reasons, rule_version)
 		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (call_id) DO NOTHING
 		 RETURNING alert_id::text, created_at`,
 		req.GetCallId(), req.GetAccountId(), score, level, raw, RuleVersion).
 		Scan(&alertID, &createdAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -331,4 +339,98 @@ func insertAlert(ctx context.Context, tx pgx.Tx, req *fraudpb.CheckCallRequest, 
 		CreatedAtMs: createdAt.UnixMilli(),
 		Status:      "new",
 	}, nil
+}
+
+func (s *Store) ListAlerts(ctx context.Context, accountID string, limit int, cursor string) ([]*fraudpb.Alert, string, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	query := `SELECT alert_id::text, call_id, account_id, risk_score, risk_level,
+	                 reasons, rule_version, created_at, status
+	          FROM alerts
+	          WHERE ($1 = '' OR account_id = $1)
+	          ORDER BY created_at DESC, alert_id DESC
+	          LIMIT $2`
+	args := []any{accountID, limit}
+	if cursor != "" {
+		createdAt, alertID, err := decodeAlertCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		query = `SELECT alert_id::text, call_id, account_id, risk_score, risk_level,
+		                reasons, rule_version, created_at, status
+		         FROM alerts
+		         WHERE ($1 = '' OR account_id = $1)
+		           AND (created_at, alert_id) < ($2::timestamptz, $3::uuid)
+		         ORDER BY created_at DESC, alert_id DESC
+		         LIMIT $4`
+		args = []any{accountID, createdAt, alertID, limit}
+	}
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	alerts := []*fraudpb.Alert{}
+	for rows.Next() {
+		var alertID, callID, account, level, version, status string
+		var score int
+		var rawReasons []byte
+		var createdAt time.Time
+		if err := rows.Scan(&alertID, &callID, &account, &score, &level,
+			&rawReasons, &version, &createdAt, &status); err != nil {
+			return nil, "", err
+		}
+		reasons := []string{}
+		if err := json.Unmarshal(rawReasons, &reasons); err != nil {
+			return nil, "", err
+		}
+		alerts = append(alerts, &fraudpb.Alert{
+			AlertId:     alertID,
+			CallId:      callID,
+			AccountId:   account,
+			RiskScore:   int32(score),
+			RiskLevel:   level,
+			Reasons:     reasons,
+			RuleVersion: version,
+			CreatedAtMs: createdAt.UnixMilli(),
+			Status:      status,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	next := ""
+	if len(alerts) == limit {
+		last := alerts[len(alerts)-1]
+		next = encodeAlertCursor(last)
+	}
+	return alerts, next, nil
+}
+
+func decodeAlertCursor(cursor string) (time.Time, string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	parts := strings.SplitN(string(raw), "|", 2)
+	if len(parts) != 2 || parts[1] == "" {
+		return time.Time{}, "", errors.New("invalid alert cursor")
+	}
+	ms, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	return time.UnixMilli(ms).UTC(), parts[1], nil
+}
+
+func encodeAlertCursor(alert *fraudpb.Alert) string {
+	raw := fmt.Sprintf("%d|%s", alert.GetCreatedAtMs(), alert.GetAlertId())
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }

@@ -2,10 +2,85 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	fraudpb "omnifoni/fraud/gen/fraudpb"
 )
+
+type fakePublisher struct {
+	mu     sync.Mutex
+	events []*fraudpb.FraudAlert
+}
+
+func (f *fakePublisher) Publish(ctx context.Context, event *fraudpb.FraudAlert) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, event)
+	return nil
+}
+
+func (f *fakePublisher) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.events)
+}
+
+func TestFraudServerCheckCallAndListAlerts(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.pool.Exec(context.Background(),
+		`INSERT INTO risk_prefixes(prefix, weight) VALUES ('900', 100)`); err != nil {
+		t.Fatal(err)
+	}
+	pub := &fakePublisher{}
+	server := NewFraudServer(s, Config{AlertThreshold: 60, SoftAccountCalls: 5, SoftPrefixCalls: 2}, pub)
+	ctx := context.Background()
+
+	for i := 0; i < 3; i++ {
+		resp, err := server.CheckCall(ctx, &fraudpb.CheckCallRequest{
+			CallId: fmt.Sprintf("srv-%d", i), AccountId: "acc-alerts",
+			Destination: "9001234", Cli: "cli",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.GetRiskScore() != 100 {
+			t.Fatalf("score = %d", resp.GetRiskScore())
+		}
+	}
+	if pub.count() != 3 {
+		t.Fatalf("published %d events, want 3", pub.count())
+	}
+
+	page, err := server.ListAlerts(ctx, &fraudpb.ListAlertsRequest{AccountId: "acc-alerts", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.GetAlerts()) != 2 || page.GetNextCursor() == "" {
+		t.Fatalf("bad first page: %+v", page)
+	}
+	last, err := server.ListAlerts(ctx, &fraudpb.ListAlertsRequest{
+		AccountId: "acc-alerts", Limit: 2, Cursor: page.GetNextCursor(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(last.GetAlerts()) != 1 || last.GetNextCursor() != "" {
+		t.Fatalf("bad last page: %+v", last)
+	}
+}
+
+func TestFraudServerRejectsMissingIDs(t *testing.T) {
+	s := newTestStore(t)
+	server := NewFraudServer(s, Config{AlertThreshold: 60}, &fakePublisher{})
+	if _, err := server.CheckCall(context.Background(), &fraudpb.CheckCallRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("want InvalidArgument, got %v", err)
+	}
+}
 
 func reserveDirect(t *testing.T, s *Store, callID, account, destination, cli string, cfg Config) (*fraudpb.CheckCallResponse, *fraudpb.Alert) {
 	t.Helper()
