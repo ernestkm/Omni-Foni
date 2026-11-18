@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	fraudpb "omnifoni/fraud/gen/fraudpb"
+	mediationpb "omnifoni/mediation/gen/mediationpb"
 )
 
 //go:embed migrate.sql
@@ -440,4 +441,75 @@ func decodeAlertCursor(cursor string) (time.Time, string, error) {
 func encodeAlertCursor(alert *fraudpb.Alert) string {
 	raw := fmt.Sprintf("%d|%s", alert.GetCreatedAtMs(), alert.GetAlertId())
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func (s *Store) IngestCDR(ctx context.Context, c *mediationpb.CallCdr) error {
+	account := c.GetAccountId()
+	prefix := DestinationPrefix(c.GetDestination())
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtext('fraud:' || $1))`, account); err != nil {
+		return err
+	}
+
+	var seen bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM processed_cdrs WHERE call_id = $1)`, c.GetCallId()).
+		Scan(&seen); err != nil {
+		return err
+	}
+	if seen {
+		return tx.Commit(ctx)
+	}
+
+	usageAccount := account
+	usageDay := time.Now().UTC()
+	usagePrefix := prefix
+
+	var resAccount, resPrefix string
+	var resDay time.Time
+	err = tx.QueryRow(ctx,
+		`DELETE FROM reservations WHERE call_id = $1
+		 RETURNING account_id, day, prefix`, c.GetCallId()).
+		Scan(&resAccount, &resDay, &resPrefix)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = nil
+	} else if err == nil {
+		usageAccount = resAccount
+		usageDay = resDay
+		usagePrefix = resPrefix
+		if err := decrementActive(ctx, tx, resAccount, resDay, resPrefix); err != nil {
+			return err
+		}
+	}
+	if err != nil {
+		return err
+	}
+
+	for _, p := range usagePrefixes(usagePrefix) {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO daily_usage(account_id, day, prefix, completed, seconds, amount_minor)
+			 VALUES ($1, $2, $3, 1, $4, $5)
+			 ON CONFLICT (account_id, day, prefix) DO UPDATE SET
+			   completed = daily_usage.completed + 1,
+			   seconds = daily_usage.seconds + EXCLUDED.seconds,
+			   amount_minor = daily_usage.amount_minor + EXCLUDED.amount_minor`,
+			usageAccount, usageDay, p, c.GetChargedSeconds(), int64(0)); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO processed_cdrs(call_id, account_id, destination, cli, seconds, amount_minor)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		c.GetCallId(), account, c.GetDestination(), c.GetCli(),
+		c.GetChargedSeconds(), int64(0)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

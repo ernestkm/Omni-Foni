@@ -5,10 +5,13 @@ go 1.27.4
 require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.13.0
+	github.com/twmb/franz-go v1.22.3
+	github.com/twmb/franz-go/pkg/kadm v1.20.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12
+	omnifoni/mediation v0.0.0-00010101000000-000000000000
 	omnifoni/observability v0.0.0-00010101000000-000000000000
 )
 
@@ -24,7 +27,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
-	github.com/twmb/franz-go v1.22.3 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.15.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0 // indirect
@@ -42,5 +44,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
 )
+
+replace omnifoni/mediation => ../mediation
 
 replace omnifoni/observability => ../observability
