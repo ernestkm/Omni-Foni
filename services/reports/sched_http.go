@@ -128,6 +128,12 @@ func validateSchedule(in Schedule, allowed []string) (Schedule, error) {
 		}
 		in.AccountIDs = kept
 	}
+	// Account scope is captured at write time: an omitted filter becomes the
+	// caller's tenant account set, so scheduled renders never pass an empty
+	// (globally scoped) filter to the internal report APIs.
+	if len(in.AccountIDs) == 0 {
+		in.AccountIDs = append([]string(nil), allowed...)
+	}
 	if in.AccountIDs == nil {
 		in.AccountIDs = []string{}
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"strings"
 	"time"
 
 	pb "omnifoni/reports/gen/reportspb"
@@ -167,6 +168,11 @@ func renderReportCSV(ctx context.Context, api API, sch Schedule, from, to time.T
 	header, err := reportCSVHeader(sch.ReportKind)
 	if err != nil {
 		return "", 0, err
+	}
+	// Fail closed: the internal report APIs read an empty account filter as
+	// "all accounts" (every tenant). A scheduled render must never pass one.
+	if len(sch.AccountIDs) == 0 {
+		return strings.Join(header, ",") + "\n", 0, nil
 	}
 	rows, tail, err := collectReportRows(ctx, api, sch, from, to)
 	if err != nil {

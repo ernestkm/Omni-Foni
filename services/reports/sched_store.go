@@ -18,6 +18,11 @@ var schedSchemaSQL string
 type Schedule struct {
 	ScheduleID string
 	TenantID   string
+	// AccountIDs scopes the render to accounts owned by the schedule's tenant.
+	// New schedules always capture the caller's tenant account set at write
+	// time, so an empty slice is never an omitted (global) filter; it can only
+	// arise when the tenant owns no accounts. Renders with empty ids produce
+	// header-only CSV and never query the report APIs.
 	AccountIDs []string
 	ReportKind string
 	WindowKind string

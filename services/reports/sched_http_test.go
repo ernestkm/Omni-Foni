@@ -273,6 +273,8 @@ func TestSchedHTTPPatchReplacesFields(t *testing.T) {
 	}
 
 	// A later body that omits optional fields resets them to their defaults.
+	// account_ids is special: omitting it recaptures the caller's tenant set
+	// instead of resetting to an empty (globally scoped) filter.
 	minimal := `{"report_kind":"cdrs","window_kind":"last_day","frequency":"daily","at_hour":0,"at_minute":0}`
 	code, reset := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller", minimal)
 	if code != http.StatusOK {
@@ -282,8 +284,45 @@ func TestSchedHTTPPatchReplacesFields(t *testing.T) {
 		reset["enabled"] != true || reset["day_of_month"] != nil {
 		t.Fatalf("defaults not applied = %v", reset)
 	}
-	if ids, _ := reset["account_ids"].([]any); len(ids) != 0 {
-		t.Fatalf("account_ids not reset = %v", reset["account_ids"])
+	if ids, _ := reset["account_ids"].([]any); len(ids) != 1 || ids[0] != "a1" {
+		t.Fatalf("account_ids not recaptured = %v", reset["account_ids"])
+	}
+}
+
+func TestSchedHTTPAccountScopeCapturedAtWrite(t *testing.T) {
+	schedReset(t)
+	srv := schedFacade(t)
+
+	code, created := doJSON(t, http.MethodPost, srv.URL+"/scheduled-reports", "reseller", schedBody("cdrs"))
+	if code != http.StatusCreated {
+		t.Fatalf("create = %d %v", code, created)
+	}
+	ids, _ := created["account_ids"].([]any)
+	if len(ids) != 1 || ids[0] != "a1" {
+		t.Fatalf("created account_ids = %v, want tenant set [a1]", created["account_ids"])
+	}
+	id, _ := created["schedule_id"].(string)
+	if id == "" {
+		t.Fatalf("no schedule_id: %v", created)
+	}
+
+	// PATCH is a replace and omitted account_ids recaptures the tenant set too.
+	code, patched := doJSON(t, http.MethodPatch, srv.URL+"/scheduled-reports/"+id, "reseller",
+		`{"report_kind":"cdrs","window_kind":"last_day","frequency":"daily","at_hour":1,"at_minute":2}`)
+	if code != http.StatusOK {
+		t.Fatalf("patch = %d %v", code, patched)
+	}
+	ids, _ = patched["account_ids"].([]any)
+	if len(ids) != 1 || ids[0] != "a1" {
+		t.Fatalf("patched account_ids = %v, want tenant set [a1]", patched["account_ids"])
+	}
+
+	stored, err := schedDB.GetSchedule(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stored.AccountIDs) != 1 || stored.AccountIDs[0] != "a1" {
+		t.Fatalf("stored account_ids = %v, want [a1]", stored.AccountIDs)
 	}
 }
 

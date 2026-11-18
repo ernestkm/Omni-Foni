@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -40,6 +41,71 @@ func (a *renderAPI) ListLowBalance(context.Context, *pb.LowBalanceRequest) (*pb.
 	return &pb.LowBalanceResponse{Accounts: a.balances}, nil
 }
 
+// countingFailAPI records any attempt to reach the internal report APIs. A
+// schedule without an account scope must fail closed before paging, never call
+// them (an empty filter means "all accounts").
+type countingFailAPI struct {
+	API
+	calls int
+}
+
+func (a *countingFailAPI) fail(name string) error {
+	a.calls++
+	return errors.New("unexpected " + name)
+}
+
+func (a *countingFailAPI) ListCdrs(context.Context, *pb.ListCdrsRequest) (*pb.ListCdrsResponse, error) {
+	return nil, a.fail("ListCdrs")
+}
+
+func (a *countingFailAPI) Summarize(context.Context, *pb.SummarizeRequest) (*pb.SummarizeResponse, error) {
+	return nil, a.fail("Summarize")
+}
+
+func (a *countingFailAPI) ListPayments(context.Context, *pb.ListPaymentsRequest) (*pb.ListPaymentsResponse, error) {
+	return nil, a.fail("ListPayments")
+}
+
+func (a *countingFailAPI) ListCharges(context.Context, *pb.ListChargesRequest) (*pb.ListChargesResponse, error) {
+	return nil, a.fail("ListCharges")
+}
+
+func (a *countingFailAPI) ListLowBalance(context.Context, *pb.LowBalanceRequest) (*pb.LowBalanceResponse, error) {
+	return nil, a.fail("ListLowBalance")
+}
+
+func TestRenderReportCSVEmptyAccountScopeFailsClosed(t *testing.T) {
+	cases := []struct {
+		kind   string
+		header []string
+	}{
+		{"cdrs", cdrCSVHeader},
+		{"summary", summaryCSVHeader},
+		{"payments", paymentCSVHeader},
+		{"charges", chargeCSVHeader},
+		{"low_balance", balanceCSVHeader},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			api := &countingFailAPI{}
+			body, rows, err := renderReportCSV(context.Background(), api,
+				Schedule{ReportKind: tc.kind}, time.Time{}, time.Time{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if api.calls != 0 {
+				t.Fatalf("api calls = %d, want 0", api.calls)
+			}
+			if rows != 0 {
+				t.Fatalf("rows = %d, want 0", rows)
+			}
+			if want := strings.Join(tc.header, ",") + "\n"; body != want {
+				t.Fatalf("body = %q, want header-only %q", body, want)
+			}
+		})
+	}
+}
+
 func TestRenderReportCSVSummaryAppendsTotal(t *testing.T) {
 	api := &renderAPI{summary: &pb.SummarizeResponse{
 		Rows: []*pb.SummaryRow{
@@ -49,7 +115,7 @@ func TestRenderReportCSVSummaryAppendsTotal(t *testing.T) {
 		Totals: &pb.SummaryRow{Calls: 2, Seconds: 90, AmountMinor: 15},
 	}}
 	body, rows, err := renderReportCSV(context.Background(), api,
-		Schedule{ReportKind: "summary", GroupBy: "prefix", PrefixLen: 3}, time.Time{}, time.Time{})
+		Schedule{ReportKind: "summary", GroupBy: "prefix", PrefixLen: 3, AccountIDs: []string{"a1"}}, time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +151,7 @@ func TestRenderReportCSVSummaryTotalSurvivesRowCap(t *testing.T) {
 		Totals: &pb.SummaryRow{Calls: calls, Seconds: seconds, AmountMinor: amount},
 	}}
 	body, n, err := renderReportCSV(context.Background(), api,
-		Schedule{ReportKind: "summary", GroupBy: "prefix", PrefixLen: 3}, time.Time{}, time.Time{})
+		Schedule{ReportKind: "summary", GroupBy: "prefix", PrefixLen: 3, AccountIDs: []string{"a1"}}, time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,16 +177,16 @@ func TestRenderReportCSVHeadersAndEmptyResults(t *testing.T) {
 		want []string
 		rows int64
 	}{
-		{"cdrs empty", Schedule{ReportKind: "cdrs"}, &renderAPI{}, cdrCSVHeader, 0},
-		{"payments", Schedule{ReportKind: "payments"}, &renderAPI{payments: []*pb.Payment{{
+		{"cdrs empty", Schedule{ReportKind: "cdrs", AccountIDs: []string{"a1"}}, &renderAPI{}, cdrCSVHeader, 0},
+		{"payments", Schedule{ReportKind: "payments", AccountIDs: []string{"a1"}}, &renderAPI{payments: []*pb.Payment{{
 			PaymentId: 1, EventId: "e1", AccountId: "a1", Gateway: "stripe",
 			AmountMinor: 10, Status: "recorded", CreatedAtMs: 1000,
 		}}}, paymentCSVHeader, 1},
-		{"charges", Schedule{ReportKind: "charges"}, &renderAPI{charges: []*pb.Charge{{
+		{"charges", Schedule{ReportKind: "charges", AccountIDs: []string{"a1"}}, &renderAPI{charges: []*pb.Charge{{
 			SessionId: "s1", AccountId: "a1", ChargedSeconds: 60,
 			AmountMinor: 10, BalanceAfter: 90, LastChargedAtMs: 1000,
 		}}}, chargeCSVHeader, 1},
-		{"low balance", Schedule{ReportKind: "low_balance"}, &renderAPI{balances: []*pb.BalanceRow{{
+		{"low balance", Schedule{ReportKind: "low_balance", AccountIDs: []string{"a1"}}, &renderAPI{balances: []*pb.BalanceRow{{
 			AccountId: "a1", Kind: "prepaid", Balance: -5, CreditLimit: 0, Currency: "USD",
 		}}}, balanceCSVHeader, 1},
 	}
