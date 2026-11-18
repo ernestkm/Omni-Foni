@@ -6,3 +6,4 @@ CREATE DATABASE payments;
 CREATE DATABASE routing;
 CREATE DATABASE sbc;
 CREATE DATABASE mediation;
+CREATE DATABASE reports_sched;

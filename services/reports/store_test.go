@@ -29,7 +29,24 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "migrate:", err)
 		os.Exit(1)
 	}
+	schedDB, err = OpenSched(ctx, schedTestDSN())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sched db:", err)
+		os.Exit(1)
+	}
+	defer schedDB.Close()
+	if err := schedDB.Migrate(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, "sched migrate:", err)
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
+}
+
+func schedTestDSN() string {
+	if s := os.Getenv("REPORTS_TEST_SCHED_DSN"); s != "" {
+		return s
+	}
+	return "postgres://postgres:dev-only@localhost:5432/reports_sched"
 }
 
 func reset(t *testing.T) {
