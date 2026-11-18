@@ -28,6 +28,7 @@ type CheckCallRequest struct {
 	Destination   string                 `protobuf:"bytes,3,opt,name=destination,proto3" json:"destination,omitempty"`
 	TrunkId       string                 `protobuf:"bytes,4,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`
 	SourceIp      string                 `protobuf:"bytes,5,opt,name=source_ip,json=sourceIp,proto3" json:"source_ip,omitempty"` // empty skips the intrusion check
+	AccountId     string                 `protobuf:"bytes,6,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -97,10 +98,19 @@ func (x *CheckCallRequest) GetSourceIp() string {
 	return ""
 }
 
+func (x *CheckCallRequest) GetAccountId() string {
+	if x != nil {
+		return x.AccountId
+	}
+	return ""
+}
+
 type CheckCallResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // ip_blocked | barring_destination | barring_cli | trunk_limit_exceeded
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Allowed bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	// reason: ip_blocked | barring_destination | barring_cli | trunk_limit_exceeded | fraud_unavailable |
+	// fraud_denied_velocity | fraud_denied_amount | fraud_denied_destination_risk | fraud_denied_pattern
+	Reason        string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -313,13 +323,15 @@ var File_sbc_v1_sbc_proto protoreflect.FileDescriptor
 
 const file_sbc_v1_sbc_proto_rawDesc = "" +
 	"\n" +
-	"\x10sbc/v1/sbc.proto\x12\x06sbc.v1\"\x97\x01\n" +
+	"\x10sbc/v1/sbc.proto\x12\x06sbc.v1\"\xb6\x01\n" +
 	"\x10CheckCallRequest\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\x12\x10\n" +
 	"\x03cli\x18\x02 \x01(\tR\x03cli\x12 \n" +
 	"\vdestination\x18\x03 \x01(\tR\vdestination\x12\x19\n" +
 	"\btrunk_id\x18\x04 \x01(\tR\atrunkId\x12\x1b\n" +
-	"\tsource_ip\x18\x05 \x01(\tR\bsourceIp\"E\n" +
+	"\tsource_ip\x18\x05 \x01(\tR\bsourceIp\x12\x1d\n" +
+	"\n" +
+	"account_id\x18\x06 \x01(\tR\taccountId\"E\n" +
 	"\x11CheckCallResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\")\n" +

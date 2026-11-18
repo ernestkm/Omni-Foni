@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package fraud.v1;
+
+option go_package = "omnifoni/fraud/gen/fraudpb";
+
+service Fraud {
+  rpc CheckCall(CheckCallRequest) returns (CheckCallResponse);
+  rpc EndCall(EndCallRequest) returns (EndCallResponse);
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+}
+
+message CheckCallRequest {
+  string call_id = 1;
+  string account_id = 2;
+  string destination = 3;
+  string cli = 4;
+}
+
+message CheckCallResponse {
+  bool allowed = 1;
+  string reason = 2;
+  int32 risk_score = 3;
+  string risk_level = 4;
+  repeated string reasons = 5;
+  string rule_version = 6;
+}
+
+message EndCallRequest {
+  string call_id = 1;
+}
+
+message EndCallResponse {}
+
+message ListAlertsRequest {
+  string account_id = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message Alert {
+  string alert_id = 1;
+  string call_id = 2;
+  string account_id = 3;
+  int32 risk_score = 4;
+  string risk_level = 5;
+  repeated string reasons = 6;
+  string rule_version = 7;
+  int64 created_at_ms = 8;
+  string status = 9;
+}
+
+message ListAlertsResponse {
+  repeated Alert alerts = 1;
+  string next_cursor = 2;
+}
+
+message FraudAlert {
+  string event_id = 1;
+  Alert alert = 2;
+}

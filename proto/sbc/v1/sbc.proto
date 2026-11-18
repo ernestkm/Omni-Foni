@@ -25,11 +25,14 @@ message CheckCallRequest {
   string destination = 3;
   string trunk_id = 4;
   string source_ip = 5;  // empty skips the intrusion check
+  string account_id = 6;
 }
 
 message CheckCallResponse {
   bool allowed = 1;
-  string reason = 2; // ip_blocked | barring_destination | barring_cli | trunk_limit_exceeded
+  // reason: ip_blocked | barring_destination | barring_cli | trunk_limit_exceeded | fraud_unavailable |
+  // fraud_denied_velocity | fraud_denied_amount | fraud_denied_destination_risk | fraud_denied_pattern
+  string reason = 2;
 }
 
 message EndCallRequest {
