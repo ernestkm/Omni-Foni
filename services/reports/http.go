@@ -318,13 +318,7 @@ func (h *httpServer) ListCdrs(w http.ResponseWriter, r *http.Request) {
 			}
 			rows := make([][]string, 0, len(resp.GetCdrs()))
 			for _, c := range resp.GetCdrs() {
-				rows = append(rows, []string{
-					c.GetCallId(), c.GetAccountId(), c.GetDestination(), c.GetCli(),
-					strconv.FormatInt(c.GetStartedAtMs(), 10), strconv.FormatInt(c.GetEndedAtMs(), 10),
-					strconv.FormatInt(c.GetChargedSeconds(), 10), c.GetEndReason(), c.GetTrunkId(),
-					c.GetRatePerSec(), strconv.FormatInt(c.GetAmountMinor(), 10),
-					strconv.FormatBool(c.GetRateMissing()),
-				})
+				rows = append(rows, cdrCSVRow(c))
 			}
 			return rows, resp.GetNextCursor(), nil
 		}, nil)
@@ -421,10 +415,7 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 			}
 			rows := make([][]string, 0, len(resp.GetRows()))
 			for _, row := range resp.GetRows() {
-				rows = append(rows, []string{
-					row.GetKey(), strconv.FormatInt(row.GetCalls(), 10),
-					strconv.FormatInt(row.GetSeconds(), 10), strconv.FormatInt(row.GetAmountMinor(), 10),
-				})
+				rows = append(rows, summaryCSVRow(row))
 			}
 			return rows, "", nil
 		}, func() []string {
@@ -584,11 +575,7 @@ func (h *httpServer) Payments(w http.ResponseWriter, r *http.Request) {
 			}
 			rows := make([][]string, 0, len(resp.GetPayments()))
 			for _, p := range resp.GetPayments() {
-				rows = append(rows, []string{
-					strconv.FormatInt(p.GetPaymentId(), 10), p.GetEventId(), p.GetAccountId(),
-					p.GetGateway(), strconv.FormatInt(p.GetAmountMinor(), 10), p.GetStatus(),
-					strconv.FormatInt(p.GetCreatedAtMs(), 10),
-				})
+				rows = append(rows, paymentCSVRow(p))
 			}
 			return rows, resp.GetNextCursor(), nil
 		}, nil)
@@ -669,11 +656,7 @@ func (h *httpServer) Charges(w http.ResponseWriter, r *http.Request) {
 			}
 			rows := make([][]string, 0, len(resp.GetCharges()))
 			for _, c := range resp.GetCharges() {
-				rows = append(rows, []string{
-					c.GetSessionId(), c.GetAccountId(),
-					strconv.FormatInt(c.GetChargedSeconds(), 10), strconv.FormatInt(c.GetAmountMinor(), 10),
-					strconv.FormatInt(c.GetBalanceAfter(), 10), strconv.FormatInt(c.GetLastChargedAtMs(), 10),
-				})
+				rows = append(rows, chargeCSVRow(c))
 			}
 			return rows, resp.GetNextCursor(), nil
 		}, nil)
@@ -759,10 +742,7 @@ func (h *httpServer) LowBalance(w http.ResponseWriter, r *http.Request) {
 			}
 			rows := make([][]string, 0, len(resp.GetAccounts()))
 			for _, a := range resp.GetAccounts() {
-				rows = append(rows, []string{
-					a.GetAccountId(), a.GetKind(), strconv.FormatInt(a.GetBalance(), 10),
-					strconv.FormatInt(a.GetCreditLimit(), 10), a.GetCurrency(),
-				})
+				rows = append(rows, balanceCSVRow(a))
 			}
 			return rows, resp.GetNextCursor(), nil
 		}, nil)
