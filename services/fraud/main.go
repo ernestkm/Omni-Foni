@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	kgo "github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/grpc"
@@ -129,8 +131,37 @@ func main() {
 		reflection.Register(g)
 	}
 	slog.Info("fraud up", "addr", addr)
-	if err := g.Serve(lis); err != nil {
+	if err := serveGRPC(ctx, g, lis); err != nil {
 		slog.Error("serve failed", "err", err)
 		os.Exit(1)
+	}
+}
+
+func serveGRPC(ctx context.Context, g *grpc.Server, lis net.Listener) error {
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- g.Serve(lis) }()
+	select {
+	case err := <-serveErr:
+		if errors.Is(err, grpc.ErrServerStopped) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		stopped := make(chan struct{})
+		go func() {
+			g.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-time.After(5 * time.Second):
+			g.Stop()
+			<-stopped
+		}
+		err := <-serveErr
+		if errors.Is(err, grpc.ErrServerStopped) {
+			return nil
+		}
+		return err
 	}
 }
