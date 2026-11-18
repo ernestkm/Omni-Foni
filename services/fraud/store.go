@@ -414,18 +414,20 @@ func (s *Store) ListAlerts(ctx context.Context, accountID string, limit int, cur
 	return alerts, next, nil
 }
 
+var errInvalidAlertCursor = errors.New("invalid alert cursor")
+
 func decodeAlertCursor(cursor string) (time.Time, string, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(cursor)
 	if err != nil {
-		return time.Time{}, "", err
+		return time.Time{}, "", fmt.Errorf("%w: %v", errInvalidAlertCursor, err)
 	}
 	parts := strings.SplitN(string(raw), "|", 2)
 	if len(parts) != 2 || parts[1] == "" {
-		return time.Time{}, "", errors.New("invalid alert cursor")
+		return time.Time{}, "", errInvalidAlertCursor
 	}
 	ms, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return time.Time{}, "", err
+		return time.Time{}, "", fmt.Errorf("%w: %v", errInvalidAlertCursor, err)
 	}
 	return time.UnixMilli(ms).UTC(), parts[1], nil
 }

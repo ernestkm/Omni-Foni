@@ -82,6 +82,17 @@ func TestFraudServerRejectsMissingIDs(t *testing.T) {
 	}
 }
 
+func TestFraudServerRejectsInvalidCursor(t *testing.T) {
+	s := newTestStore(t)
+	server := NewFraudServer(s, Config{AlertThreshold: 60}, &fakePublisher{})
+	_, err := server.ListAlerts(context.Background(), &fraudpb.ListAlertsRequest{
+		AccountId: "acc-alerts", Limit: 2, Cursor: "!!!",
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("want InvalidArgument, got %v", err)
+	}
+}
+
 func reserveDirect(t *testing.T, s *Store, callID, account, destination, cli string, cfg Config) (*fraudpb.CheckCallResponse, *fraudpb.Alert) {
 	t.Helper()
 	resp, alert, err := s.Reserve(context.Background(), &fraudpb.CheckCallRequest{

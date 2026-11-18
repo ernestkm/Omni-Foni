@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -79,6 +80,9 @@ func (s *FraudServer) ListAlerts(ctx context.Context, req *fraudpb.ListAlertsReq
 
 	alerts, next, err := s.store.ListAlerts(ctx, req.GetAccountId(), int(req.GetLimit()), req.GetCursor())
 	if err != nil {
+		if errors.Is(err, errInvalidAlertCursor) {
+			return nil, status.Error(codes.InvalidArgument, "invalid cursor")
+		}
 		slog.ErrorContext(ctx, "fraud list alerts failed", "err", err)
 		span.RecordError(err)
 		return nil, status.Error(codes.Internal, "fraud store failure")
