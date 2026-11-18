@@ -38,6 +38,7 @@ func NewAuthenticator(base string) *Authenticator {
 }
 
 type meResponse struct {
+	UserID   string `json:"user_id"`
 	Role     string `json:"role"`
 	TenantID string `json:"tenant_id"`
 }
@@ -49,44 +50,60 @@ type accountResponse struct {
 // Accounts validates the bearer token and returns the account IDs the caller
 // may see. Status is the HTTP status to send when err is non-nil.
 func (a *Authenticator) Accounts(ctx context.Context, token, requestedTenant string) ([]string, int, error) {
+	_, ids, code, err := a.Scope(ctx, token, requestedTenant)
+	return ids, code, err
+}
+
+// Scope resolves the effective tenant and the account IDs the caller may see.
+// Admin scoping mirrors Accounts: requestedTenant wins, else 400.
+func (a *Authenticator) Scope(ctx context.Context, token, requestedTenant string) (string, []string, int, error) {
 	me, code, err := a.getMe(ctx, token)
 	if err != nil {
-		return nil, code, err
+		return "", nil, code, err
 	}
 	if me.Role == "user" {
-		return nil, http.StatusForbidden, errors.New("forbidden")
+		return "", nil, http.StatusForbidden, errors.New("forbidden")
 	}
 	scope := me.TenantID
 	if me.Role == "admin" {
 		scope = requestedTenant
 	}
 	if scope == "" {
-		return nil, http.StatusBadRequest, errors.New("tenant_id required")
+		return "", nil, http.StatusBadRequest, errors.New("tenant_id required")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		a.base+"/accounts?tenant_id="+url.QueryEscape(scope), nil)
 	if err != nil {
-		return nil, http.StatusBadGateway, err
+		return "", nil, http.StatusBadGateway, err
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return nil, http.StatusBadGateway, err
+		return "", nil, http.StatusBadGateway, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, http.StatusBadGateway, errors.New("identity accounts failed")
+		return "", nil, http.StatusBadGateway, errors.New("identity accounts failed")
 	}
 	var accts []accountResponse
 	if err := json.NewDecoder(resp.Body).Decode(&accts); err != nil {
-		return nil, http.StatusBadGateway, err
+		return "", nil, http.StatusBadGateway, err
 	}
 	ids := make([]string, 0, len(accts))
 	for _, a := range accts {
 		ids = append(ids, a.AccountID)
 	}
-	return ids, http.StatusOK, nil
+	return scope, ids, http.StatusOK, nil
+}
+
+// UserID returns the caller's identity user id for audit fields.
+func (a *Authenticator) UserID(ctx context.Context, token string) (string, int, error) {
+	me, code, err := a.getMe(ctx, token)
+	if err != nil {
+		return "", code, err
+	}
+	return me.UserID, http.StatusOK, nil
 }
 
 func (a *Authenticator) getMe(ctx context.Context, token string) (meResponse, int, error) {
@@ -111,8 +128,9 @@ func (a *Authenticator) getMe(ctx context.Context, token string) (meResponse, in
 }
 
 type httpServer struct {
-	api  API
-	auth *Authenticator
+	api   API
+	auth  *Authenticator
+	sched *Scheduler
 }
 
 func bearer(r *http.Request) (string, bool) {
