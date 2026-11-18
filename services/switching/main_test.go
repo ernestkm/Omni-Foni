@@ -333,15 +333,17 @@ func TestRoutingOutageFailClosed(t *testing.T) {
 
 // fakeSbc is an in-process SbcChecker with a concurrent-call limit.
 type fakeSbc struct {
-	limit  int
-	err    error
-	mu     sync.Mutex
-	active int
+	limit         int
+	err           error
+	mu            sync.Mutex
+	active        int
+	lastAccountID string
 }
 
 func (f *fakeSbc) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (*sbcpb.CheckCallResponse, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.lastAccountID = req.GetAccountId()
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -395,6 +397,26 @@ func TestSbcOutageFailClosed(t *testing.T) {
 	resp := startCall(t, client, "acc-sbcout", "35551234567")
 	if resp.Allowed || resp.Reason != "sbc_unavailable" {
 		t.Fatalf("want sbc_unavailable deny, got %+v", resp)
+	}
+}
+
+// TestSbcReceivesAccountID: switching forwards the StartCall account id to the
+// SBC CheckCall request so fraud checks can be scoped to the caller.
+func TestSbcReceivesAccountID(t *testing.T) {
+	seed(t, "acc-sbc-account", 1000, "3555", "1.000000")
+	rc := routingClientFor(t)
+	seedLcr(t, rc, "3555", "trunk-sbc-account", 2)
+	fsb := &fakeSbc{limit: 1}
+	client := startSwitchingAll(t, chargingAddr(), nil, routingClient{rc}, fsb)
+	resp := startCall(t, client, "acc-sbc-account", "35551234567")
+	if !resp.Allowed {
+		t.Fatalf("call denied: %+v", resp)
+	}
+	stopCall(t, client, resp.CallId)
+	fsb.mu.Lock()
+	defer fsb.mu.Unlock()
+	if fsb.lastAccountID != "acc-sbc-account" {
+		t.Fatalf("SBC account id = %q", fsb.lastAccountID)
 	}
 }
 

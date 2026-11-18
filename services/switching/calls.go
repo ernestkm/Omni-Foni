@@ -155,6 +155,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		sres, err := r.sbc.CheckCall(ctx, &sbcpb.CheckCallRequest{
 			CallId: callID, Cli: req.GetCli(), Destination: req.GetDestination(),
 			TrunkId: trunk, SourceIp: req.GetSourceIp(),
+			AccountId: req.GetAccountId(),
 		})
 		switch {
 		case err != nil:
