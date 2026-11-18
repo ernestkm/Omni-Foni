@@ -246,3 +246,17 @@ func TestEmptyDestinationDoesNotDoubleCountUsage(t *testing.T) {
 		t.Fatalf("want velocity deny after two calls, got %+v", third)
 	}
 }
+
+func TestReserveAfterProcessedCDR(t *testing.T) {
+	s := newTestStore(t)
+	cfg := Config{AlertThreshold: 101, SoftAccountCalls: 5, SoftPrefixCalls: 2}
+	if _, err := s.pool.Exec(context.Background(),
+		`INSERT INTO processed_cdrs(call_id, account_id, destination, cli, seconds, amount_minor)
+		 VALUES ('old-cdr', 'acc-history', '27821110000', '27820000000', 10, 100)`); err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := reserveDirect(t, s, "new-call", "acc-history", "2782999", "27820000000", cfg)
+	if !resp.GetAllowed() {
+		t.Fatalf("call denied after prior CDR: %+v", resp)
+	}
+}

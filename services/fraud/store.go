@@ -263,6 +263,7 @@ func readSignals(ctx context.Context, tx pgx.Tx, account, destination, prefix, c
 			break
 		}
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return Signals{}, err
 	}

@@ -12,14 +12,14 @@ done
 
 docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT 1 FROM pg_database WHERE datname='charging'" | grep -q 1 || fail "charging DB missing"
 
-dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','mediation','reports_sched')")
-[ "$dbs" = "9" ] || fail "expected 9 context databases, got $dbs"
+dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','fraud','mediation','reports_sched')")
+[ "$dbs" = "10" ] || fail "expected 10 context databases, got $dbs"
 
 docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
 docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || fail "kafka"
 
-for s in charging switching mediation billing payments identity routing sbc reconciliation reports; do
+for s in charging switching mediation billing payments identity routing sbc fraud reconciliation reports; do
   st=$(docker inspect --format '{{.State.Status}}' "omni-fon-$s-1" 2>/dev/null || echo missing)
   [ "$st" = "running" ] || fail "$s not running ($st)"
   echo "ok: $s running"
@@ -35,6 +35,8 @@ docker exec omni-fon-postgres-1 psql -U postgres -d catalogue -qAt -c "INSERT IN
 docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INTO accounts(account_id,kind,balance,credit_limit) VALUES ('acc-smoke-live','prepaid',100000,0) ON CONFLICT (account_id) DO UPDATE SET balance=EXCLUDED.balance, kind='prepaid', credit_limit=0" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled) VALUES ('trunk-smoke',true) ON CONFLICT (trunk_id) DO UPDATE SET enabled=true" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-smoke',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d fraud -qAt -c "INSERT INTO fraud_controls(account_id,max_calls_per_day,max_calls_per_prefix_day,enabled) VALUES ('acc-smoke-fraud',1,NULL,true) ON CONFLICT (account_id) DO UPDATE SET max_calls_per_day=EXCLUDED.max_calls_per_day, max_calls_per_prefix_day=EXCLUDED.max_calls_per_prefix_day, enabled=true" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d fraud -qAt -c "INSERT INTO risk_prefixes(prefix,weight) VALUES ('900',30) ON CONFLICT (prefix) DO UPDATE SET weight=EXCLUDED.weight" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO accounts(account_id,tenant_id,created_by) VALUES ('acc-smoke-live','$tid','$uid') ON CONFLICT (account_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id, created_by=EXCLUDED.created_by" >/dev/null
 csv=$(curl -fsS -H 'Authorization: Bearer tok-smoke' "http://localhost:50062/reports/cdrs?from=2026-01-01&to=2026-01-02&tenant_id=$tid&format=csv")
 hdr=${csv%%$'\n'*}
@@ -44,6 +46,7 @@ echo "ok: reports csv"
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 (cd services/reports && go run ./cmd/smokelive) || fail "live calls probe"
+(cd services/fraud && go run ./cmd/fraudsmoke) || fail "fraud probe"
 
 sched=$(curl -fsS -X POST -H 'Authorization: Bearer tok-smoke' -H 'Content-Type: application/json' \
   -d '{"report_kind":"cdrs","window_kind":"previous_month","frequency":"daily","at_hour":0,"at_minute":0}' \
@@ -62,10 +65,10 @@ hdr=$(head -n 1 /tmp/sched.csv)
 grep -qi '^content-disposition: attachment' /tmp/sched-hdr.txt || fail "scheduled report headers"
 echo "ok: scheduled report"
 
-# The probe issues billing and payments RPCs through reconciliation, so the
-# trace backend must have spans for all three; otherwise tracing is broken.
+# The probes call reconciliation, reports and fraud, so the trace backend must
+# have spans for all of them; otherwise tracing is broken.
 services=$(curl -fsS http://localhost:16686/api/services) || fail "jaeger api"
-for s in reconciliation billing payments reports; do
+for s in reconciliation billing payments reports fraud; do
   echo "$services" | grep -q "\"$s\"" || fail "no traces for $s"
   echo "ok: traces for $s"
 done
