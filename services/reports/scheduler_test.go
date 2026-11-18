@@ -18,8 +18,10 @@ func (f *fakePublisher) PublishReportReady(_ context.Context, ev *schedulingpb.R
 }
 
 func TestDueSchedule(t *testing.T) {
-	weekday := 1
+	monday := 1
+	tuesday := 2
 	dom := 31
+	day17 := 17
 	now := time.Date(2026, 11, 17, 6, 30, 0, 0, time.UTC) // Tuesday
 	cases := []struct {
 		name string
@@ -29,9 +31,11 @@ func TestDueSchedule(t *testing.T) {
 		{"daily hit", Schedule{Enabled: true, Frequency: "daily", AtHour: 6, AtMinute: 30}, true},
 		{"daily wrong minute", Schedule{Enabled: true, Frequency: "daily", AtHour: 6, AtMinute: 31}, false},
 		{"disabled", Schedule{Enabled: false, Frequency: "daily", AtHour: 6, AtMinute: 30}, false},
-		{"weekly hit (Tuesday=2? no: 1=Monday, Tuesday=2)", Schedule{Enabled: true, Frequency: "weekly", AtHour: 6, AtMinute: 30, Weekday: &weekday}, false},
-		{"weekly miss", Schedule{Enabled: true, Frequency: "weekly", AtHour: 6, AtMinute: 30, Weekday: &dom}, false},
-		{"monthly hit (Nov has 30 days)", Schedule{Enabled: true, Frequency: "monthly", AtHour: 6, AtMinute: 30, DayOfMonth: &dom}, false},
+		{"weekly hit (Tuesday=2)", Schedule{Enabled: true, Frequency: "weekly", AtHour: 6, AtMinute: 30, Weekday: &tuesday}, true},
+		{"weekly miss (Monday)", Schedule{Enabled: true, Frequency: "weekly", AtHour: 6, AtMinute: 30, Weekday: &monday}, false},
+		{"weekly miss (day number)", Schedule{Enabled: true, Frequency: "weekly", AtHour: 6, AtMinute: 30, Weekday: &dom}, false},
+		{"monthly hit", Schedule{Enabled: true, Frequency: "monthly", AtHour: 6, AtMinute: 30, DayOfMonth: &day17}, true},
+		{"monthly miss (Nov has 30 days)", Schedule{Enabled: true, Frequency: "monthly", AtHour: 6, AtMinute: 30, DayOfMonth: &dom}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -51,6 +55,14 @@ func TestResolvePeriod(t *testing.T) {
 	from, to, err := resolvePeriod("last_day", now)
 	if err != nil || !from.Equal(now.Add(-24*time.Hour)) || !to.Equal(now) {
 		t.Fatalf("last_day = %v, %v, %v", from, to, err)
+	}
+	from, to, err = resolvePeriod("last_week", now)
+	if err != nil || !from.Equal(now.Add(-7*24*time.Hour)) || !to.Equal(now) {
+		t.Fatalf("last_week = %v, %v, %v", from, to, err)
+	}
+	from, to, err = resolvePeriod("last_month", now)
+	if err != nil || !from.Equal(now.Add(-30*24*time.Hour)) || !to.Equal(now) {
+		t.Fatalf("last_month = %v, %v, %v", from, to, err)
 	}
 	from, to, err = resolvePeriod("previous_month", now)
 	if err != nil || !from.Equal(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)) ||
@@ -99,6 +111,9 @@ func TestRunDueSchedulesCreatesOneArtifact(t *testing.T) {
 	again, _ := schedDB.ListArtifacts(ctx, sch.ScheduleID)
 	if len(again) != 1 {
 		t.Fatalf("duplicate artifact on same slot: %d", len(again))
+	}
+	if len(pub.events) != 1 {
+		t.Fatalf("duplicate event on same slot: %d", len(pub.events))
 	}
 }
 

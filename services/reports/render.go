@@ -74,6 +74,12 @@ func collectReportRows(ctx context.Context, api API, sch Schedule, from, to time
 				return nil, nil, err
 			}
 			totals = resp.GetTotals()
+			if totals != nil {
+				tr := totals
+				tail = func() []string {
+					return summaryTotalRow(tr)
+				}
+			}
 			for _, row := range resp.GetRows() {
 				if len(rows) >= csvMaxRows {
 					return rows, tail, nil
@@ -81,13 +87,6 @@ func collectReportRows(ctx context.Context, api API, sch Schedule, from, to time
 				rows = append(rows, summaryCSVRow(row))
 			}
 			break // Summarize returns everything in one response
-		}
-		if totals != nil {
-			tr := totals
-			tail = func() []string {
-				return []string{"TOTAL", fmt.Sprintf("%d", tr.GetCalls()),
-					fmt.Sprintf("%d", tr.GetSeconds()), fmt.Sprintf("%d", tr.GetAmountMinor())}
-			}
 		}
 	case "payments":
 		var cursor string

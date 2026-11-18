@@ -21,6 +21,11 @@ func summaryCSVRow(r *pb.SummaryRow) []string {
 		strconv.FormatInt(r.GetSeconds(), 10), strconv.FormatInt(r.GetAmountMinor(), 10)}
 }
 
+func summaryTotalRow(r *pb.SummaryRow) []string {
+	return []string{"TOTAL", strconv.FormatInt(r.GetCalls(), 10),
+		strconv.FormatInt(r.GetSeconds(), 10), strconv.FormatInt(r.GetAmountMinor(), 10)}
+}
+
 func paymentCSVRow(p *pb.Payment) []string {
 	return []string{
 		strconv.FormatInt(p.GetPaymentId(), 10), p.GetEventId(), p.GetAccountId(),

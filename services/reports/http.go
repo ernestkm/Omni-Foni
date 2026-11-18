@@ -403,24 +403,20 @@ func (h *httpServer) Summarize(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if csvOut {
-		var totals rowJSON
+		var totals *pb.SummaryRow
 		streamCSV(w, r, "summary", summaryCSVHeader, func(string) ([][]string, string, error) {
 			resp, err := h.api.Summarize(r.Context(), req)
 			if err != nil {
 				return nil, "", err
 			}
-			totals = rowJSON{
-				Calls: resp.GetTotals().GetCalls(), Seconds: resp.GetTotals().GetSeconds(),
-				AmountMinor: resp.GetTotals().GetAmountMinor(),
-			}
+			totals = resp.GetTotals()
 			rows := make([][]string, 0, len(resp.GetRows()))
 			for _, row := range resp.GetRows() {
 				rows = append(rows, summaryCSVRow(row))
 			}
 			return rows, "", nil
 		}, func() []string {
-			return []string{"TOTAL", strconv.FormatInt(totals.Calls, 10),
-				strconv.FormatInt(totals.Seconds, 10), strconv.FormatInt(totals.AmountMinor, 10)}
+			return summaryTotalRow(totals)
 		})
 		return
 	}
