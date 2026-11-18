@@ -59,3 +59,5 @@ protoc:
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/reports --go_opt=module=omnifoni/reports \
 		--go-grpc_out=services/reports --go-grpc_opt=module=omnifoni/reports \
 		proto/reports/v1/reports.proto
+	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/reports --go_opt=module=omnifoni/reports \
+		proto/scheduling/v1/scheduling.proto

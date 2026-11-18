@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package scheduling.v1;
+
+option go_package = "omnifoni/reports/gen/schedulingpb";
+
+// ReportReadyEvent announces one stored scheduled-report artifact on the
+// report.ready topic (docs/superpowers/specs/2026-11-17-scheduled-reports-design.md).
+message ReportReadyEvent {
+  string schedule_id   = 1;
+  string artifact_id   = 2;
+  string tenant_id     = 3;
+  string report_kind   = 4;
+  string period_from   = 5; // RFC3339 UTC
+  string period_to     = 6; // RFC3339 UTC
+  int64  row_count     = 7;
+  int64  created_at_ms = 8;
+}
