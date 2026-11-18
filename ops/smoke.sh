@@ -12,8 +12,8 @@ done
 
 docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT 1 FROM pg_database WHERE datname='charging'" | grep -q 1 || fail "charging DB missing"
 
-dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','mediation')")
-[ "$dbs" = "8" ] || fail "expected 8 context databases, got $dbs"
+dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','mediation','reports_sched')")
+[ "$dbs" = "9" ] || fail "expected 9 context databases, got $dbs"
 
 docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
@@ -44,6 +44,23 @@ echo "ok: reports csv"
 (cd services/reconciliation && go run ./cmd/smokerecon) || fail "reconciliation probe"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 (cd services/reports && go run ./cmd/smokelive) || fail "live calls probe"
+
+sched=$(curl -fsS -X POST -H 'Authorization: Bearer tok-smoke' -H 'Content-Type: application/json' \
+  -d '{"report_kind":"cdrs","window_kind":"previous_month","frequency":"daily","at_hour":0,"at_minute":0}' \
+  "http://localhost:50062/scheduled-reports?tenant_id=$tid")
+sid=$(echo "$sched" | sed -E 's/.*"schedule_id":"([^"]+)".*/\1/')
+[ -n "$sid" ] || fail "scheduled report create"
+code=$(curl -sS -o /tmp/sched-run.json -w '%{http_code}' -X POST -H 'Authorization: Bearer tok-smoke' \
+  "http://localhost:50062/scheduled-reports/$sid/run?tenant_id=$tid")
+[ "$code" = "202" ] || fail "scheduled report run ($code)"
+aid=$(sed -E 's/.*"artifact_id":"([^"]+)".*/\1/' /tmp/sched-run.json)
+[ -n "$aid" ] || fail "scheduled report artifact"
+curl -fsS -D /tmp/sched-hdr.txt -o /tmp/sched.csv -H 'Authorization: Bearer tok-smoke' \
+  "http://localhost:50062/scheduled-reports/$sid/artifacts/$aid/download?tenant_id=$tid" || fail "scheduled report download"
+hdr=$(head -n 1 /tmp/sched.csv)
+[ "$hdr" = "call_id,account_id,destination,cli,started_at_ms,ended_at_ms,charged_seconds,end_reason,trunk_id,rate_per_sec,amount_minor,rate_missing" ] || fail "scheduled report csv"
+grep -qi '^content-disposition: attachment' /tmp/sched-hdr.txt || fail "scheduled report headers"
+echo "ok: scheduled report"
 
 # The probe issues billing and payments RPCs through reconciliation, so the
 # trace backend must have spans for all three; otherwise tracing is broken.
