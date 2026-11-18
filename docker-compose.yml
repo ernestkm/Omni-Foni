@@ -226,6 +226,7 @@ services:
       SBC_DSN: postgres://postgres:dev-only@postgres:5432/sbc
       SBC_ADDR: ":50058"
       SBC_REFLECTION: "1"
+      SBC_FRAUD_ADDR: fraud:50063
       OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
       OBS_SAMPLE_RATIO: "1.0"
     ports:
@@ -233,6 +234,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      fraud:
+        condition: service_started
 
   fraud:
     build:

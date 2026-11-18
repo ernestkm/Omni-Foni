@@ -10,8 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	fraudpb "omnifoni/fraud/gen/fraudpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 	"omnifoni/observability"
 )
@@ -53,8 +55,21 @@ func main() {
 		slog.Error("listen", "err", err)
 		os.Exit(1)
 	}
+	var fraudChecker []FraudChecker
+	if fraudAddr := os.Getenv("SBC_FRAUD_ADDR"); fraudAddr != "" {
+		fraudConn, err := grpc.NewClient(fraudAddr,
+			append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())},
+				observability.ClientOptions()...)...)
+		if err != nil {
+			slog.Error("fraud dial", "err", err)
+			os.Exit(1)
+		}
+		defer fraudConn.Close()
+		fraudChecker = append(fraudChecker, fraudClient{c: fraudpb.NewFraudClient(fraudConn)})
+	}
+
 	g := grpc.NewServer(observability.ServerOptions()...)
-	sbcpb.RegisterSbcServer(g, NewSBCServer(pool))
+	sbcpb.RegisterSbcServer(g, NewSBCServer(pool, fraudChecker...))
 	if reflectFlag {
 		reflection.Register(g)
 	}

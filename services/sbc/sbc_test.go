@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	fraudpb "omnifoni/fraud/gen/fraudpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 )
 
@@ -29,7 +31,35 @@ type sbc struct {
 	pool *pgxpool.Pool
 }
 
-func startServer(t *testing.T) *sbc {
+type fakeFraud struct {
+	mu         sync.Mutex
+	reqs       []*fraudpb.CheckCallRequest
+	endCalls   []string
+	denyReason string
+	err        error
+}
+
+func (f *fakeFraud) CheckCall(ctx context.Context, req *fraudpb.CheckCallRequest) (*fraudpb.CheckCallResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reqs = append(f.reqs, req)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.denyReason != "" {
+		return &fraudpb.CheckCallResponse{Allowed: false, Reason: f.denyReason}, nil
+	}
+	return &fraudpb.CheckCallResponse{Allowed: true}, nil
+}
+
+func (f *fakeFraud) EndCall(ctx context.Context, req *fraudpb.EndCallRequest) (*fraudpb.EndCallResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.endCalls = append(f.endCalls, req.GetCallId())
+	return &fraudpb.EndCallResponse{}, nil
+}
+
+func startServer(t *testing.T, fraud ...FraudChecker) *sbc {
 	t.Helper()
 	pool, err := pgxpool.New(context.Background(), dsn())
 	if err != nil {
@@ -48,7 +78,7 @@ func startServer(t *testing.T) *sbc {
 		t.Fatal(err)
 	}
 	g := grpc.NewServer()
-	sbcpb.RegisterSbcServer(g, NewSBCServer(pool))
+	sbcpb.RegisterSbcServer(g, NewSBCServer(pool, fraud...))
 	go g.Serve(lis)
 	t.Cleanup(g.Stop)
 
@@ -82,14 +112,24 @@ func (s *sbc) addRule(matchType, prefix, action string) {
 	}
 }
 
-func (s *sbc) check(callID, cli, dest, trunk, ip string) *sbcpb.CheckCallResponse {
+func (s *sbc) checkWithAccount(callID, account, cli, dest, trunk, ip string) *sbcpb.CheckCallResponse {
 	s.t.Helper()
 	res, err := s.c.CheckCall(context.Background(), &sbcpb.CheckCallRequest{
-		CallId: callID, Cli: cli, Destination: dest, TrunkId: trunk, SourceIp: ip})
+		CallId:      callID,
+		Cli:         cli,
+		Destination: dest,
+		TrunkId:     trunk,
+		SourceIp:    ip,
+		AccountId:   account,
+	})
 	if err != nil {
 		s.t.Fatal(err)
 	}
 	return res
+}
+
+func (s *sbc) check(callID, cli, dest, trunk, ip string) *sbcpb.CheckCallResponse {
+	return s.checkWithAccount(callID, "acc-sbc", cli, dest, trunk, ip)
 }
 
 // TestTrunkLimitEnforced: the third concurrent call on a 2-call trunk is
@@ -196,5 +236,80 @@ func TestIntrusionDetection(t *testing.T) {
 	}
 	if res := s.check("decay-1", "cli", "3555123", "t1", "10.0.0.66"); !res.Allowed {
 		t.Fatalf("old failures still blocking: %+v", res)
+	}
+}
+
+func TestFraudOrderAndAccountPropagation(t *testing.T) {
+	ff := &fakeFraud{}
+	s := startServer(t, ff)
+	res := s.checkWithAccount("f1", "acc-fraud", "cli", "3555123", "t1", "")
+	if !res.Allowed {
+		t.Fatalf("allowed call denied: %+v", res)
+	}
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if len(ff.reqs) != 1 || ff.reqs[0].GetAccountId() != "acc-fraud" {
+		t.Fatalf("fraud request missing account: %+v", ff.reqs)
+	}
+}
+
+func TestFraudDenyStopsBeforeTrunkReservation(t *testing.T) {
+	ff := &fakeFraud{denyReason: "fraud_velocity_account"}
+	s := startServer(t, ff)
+	res := s.checkWithAccount("f2", "acc-fraud", "cli", "3555123", "t2", "")
+	if res.Allowed || res.Reason != "fraud_velocity_account" {
+		t.Fatalf("want fraud deny, got %+v", res)
+	}
+	var active int
+	if err := s.pool.QueryRow(context.Background(),
+		`SELECT count(*) FROM active_calls WHERE call_id = 'f2'`).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active != 0 {
+		t.Fatalf("denied call reserved trunk slot: %d", active)
+	}
+}
+
+func TestFraudReleaseOnTrunkDenial(t *testing.T) {
+	ff := &fakeFraud{}
+	s := startServer(t, ff)
+	s.setLimit("t3", 1)
+	if _, err := s.pool.Exec(context.Background(),
+		`INSERT INTO active_calls (call_id, trunk_id) VALUES ('prefill', 't3')`); err != nil {
+		t.Fatal(err)
+	}
+	res := s.checkWithAccount("f3", "acc-fraud", "cli", "3555123", "t3", "")
+	if res.Allowed || res.Reason != "trunk_limit_exceeded" {
+		t.Fatalf("want trunk deny, got %+v", res)
+	}
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if len(ff.endCalls) != 1 || ff.endCalls[0] != "f3" {
+		t.Fatalf("fraud reservation not released: %v", ff.endCalls)
+	}
+}
+
+func TestFraudOutageFailClosed(t *testing.T) {
+	ff := &fakeFraud{err: errors.New("fraud down")}
+	s := startServer(t, ff)
+	res := s.checkWithAccount("f4", "acc-fraud", "cli", "3555123", "t4", "")
+	if res.Allowed || res.Reason != "fraud_unavailable" {
+		t.Fatalf("want fraud_unavailable, got %+v", res)
+	}
+}
+
+func TestEndCallReleasesFraudReservation(t *testing.T) {
+	ff := &fakeFraud{}
+	s := startServer(t, ff)
+	if res := s.checkWithAccount("f5", "acc-fraud", "cli", "3555123", "t5", ""); !res.Allowed {
+		t.Fatalf("call denied: %+v", res)
+	}
+	if _, err := s.c.EndCall(context.Background(), &sbcpb.EndCallRequest{CallId: "f5"}); err != nil {
+		t.Fatal(err)
+	}
+	ff.mu.Lock()
+	defer ff.mu.Unlock()
+	if len(ff.endCalls) != 1 || ff.endCalls[0] != "f5" {
+		t.Fatalf("fraud end not called: %v", ff.endCalls)
 	}
 }

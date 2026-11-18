@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	_ "embed"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	fraudpb "omnifoni/fraud/gen/fraudpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 )
 
@@ -30,14 +32,34 @@ const (
 	failWindow    = time.Minute
 )
 
+type FraudChecker interface {
+	CheckCall(context.Context, *fraudpb.CheckCallRequest) (*fraudpb.CheckCallResponse, error)
+	EndCall(context.Context, *fraudpb.EndCallRequest) (*fraudpb.EndCallResponse, error)
+}
+
+type fraudClient struct{ c fraudpb.FraudClient }
+
+func (f fraudClient) CheckCall(ctx context.Context, req *fraudpb.CheckCallRequest) (*fraudpb.CheckCallResponse, error) {
+	return f.c.CheckCall(ctx, req)
+}
+
+func (f fraudClient) EndCall(ctx context.Context, req *fraudpb.EndCallRequest) (*fraudpb.EndCallResponse, error) {
+	return f.c.EndCall(ctx, req)
+}
+
 // SBCServer implements sbc.v1.Sbc.
 type SBCServer struct {
 	sbcpb.UnimplementedSbcServer
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	fraud FraudChecker
 }
 
-func NewSBCServer(pool *pgxpool.Pool) *SBCServer {
-	return &SBCServer{pool: pool}
+func NewSBCServer(pool *pgxpool.Pool, fraud ...FraudChecker) *SBCServer {
+	s := &SBCServer{pool: pool}
+	if len(fraud) > 0 {
+		s.fraud = fraud[0]
+	}
+	return s
 }
 
 // CheckCall runs the playbook: intrusion block, destination barring, caller
@@ -45,7 +67,9 @@ func NewSBCServer(pool *pgxpool.Pool) *SBCServer {
 // same transaction that enforces the limit, so concurrent starts race safely.
 func (s *SBCServer) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) (resp *sbcpb.CheckCallResponse, err error) {
 	ctx, span := otel.Tracer("omnifoni/sbc").Start(ctx, "sbc.check_call",
-		trace.WithAttributes(attribute.String("trunk_id", req.GetTrunkId())))
+		trace.WithAttributes(
+			attribute.String("trunk_id", req.GetTrunkId()),
+			attribute.String("account_id", req.GetAccountId())))
 	defer func() {
 		if resp != nil && !resp.GetAllowed() {
 			span.SetAttributes(attribute.String("deny_reason", resp.GetReason()))
@@ -74,7 +98,36 @@ func (s *SBCServer) CheckCall(ctx context.Context, req *sbcpb.CheckCallRequest) 
 	} else if ok {
 		return r, nil
 	}
-	return s.reserve(ctx, req)
+
+	fraudReserved := false
+	if s.fraud != nil && req.GetAccountId() != "" {
+		fres, err := s.fraud.CheckCall(ctx, &fraudpb.CheckCallRequest{
+			CallId:      req.GetCallId(),
+			AccountId:   req.GetAccountId(),
+			Destination: req.GetDestination(),
+			Cli:         req.GetCli(),
+		})
+		if err != nil {
+			slog.ErrorContext(ctx, "fraud unreachable, fail-closed", "call", req.GetCallId(), "err", err)
+			return deny("fraud_unavailable"), nil
+		}
+		if !fres.GetAllowed() {
+			return deny(fres.GetReason()), nil
+		}
+		fraudReserved = true
+	}
+
+	resp, err = s.reserve(ctx, req)
+	if err != nil {
+		if fraudReserved {
+			s.releaseFraud(req.GetCallId())
+		}
+		return nil, err
+	}
+	if !resp.GetAllowed() && fraudReserved {
+		s.releaseFraud(req.GetCallId())
+	}
+	return resp, nil
 }
 
 // barring applies the longest-prefix rule matching the value.
@@ -155,7 +208,18 @@ func (s *SBCServer) EndCall(ctx context.Context, req *sbcpb.EndCallRequest) (*sb
 		`DELETE FROM active_calls WHERE call_id = $1`, req.GetCallId()); err != nil {
 		return nil, err
 	}
+	if s.fraud != nil {
+		if _, err := s.fraud.EndCall(ctx, &fraudpb.EndCallRequest{CallId: req.GetCallId()}); err != nil {
+			return nil, err
+		}
+	}
 	return &sbcpb.EndCallResponse{}, nil
+}
+
+func (s *SBCServer) releaseFraud(callID string) {
+	if s.fraud != nil {
+		_, _ = s.fraud.EndCall(context.Background(), &fraudpb.EndCallRequest{CallId: callID})
+	}
 }
 
 // ReportAuthFailure records one failed authentication attempt.
