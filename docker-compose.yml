@@ -234,6 +234,29 @@ services:
       postgres:
         condition: service_healthy
 
+  fraud:
+    build:
+      context: ./services
+      dockerfile: fraud/Dockerfile
+    environment:
+      FRAUD_DSN: postgres://postgres:dev-only@postgres:5432/fraud
+      FRAUD_ADDR: ":50063"
+      FRAUD_REFLECTION: "1"
+      FRAUD_KAFKA: kafka:9092
+      FRAUD_TOPIC_ALERTS: fraud.alerts
+      FRAUD_ALERT_THRESHOLD: "60"
+      FRAUD_SOFT_ACCOUNT_CALLS: "5"
+      FRAUD_SOFT_PREFIX_CALLS: "2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
+    ports:
+      - "50063:50063"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
   reconciliation:
     build:
       context: ./services
