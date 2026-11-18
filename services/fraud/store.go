@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -429,7 +430,11 @@ func decodeAlertCursor(cursor string) (time.Time, string, error) {
 	if err != nil {
 		return time.Time{}, "", fmt.Errorf("%w: %v", errInvalidAlertCursor, err)
 	}
-	return time.UnixMilli(ms).UTC(), parts[1], nil
+	alertID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return time.Time{}, "", fmt.Errorf("%w: %v", errInvalidAlertCursor, err)
+	}
+	return time.UnixMilli(ms).UTC(), alertID.String(), nil
 }
 
 func encodeAlertCursor(alert *fraudpb.Alert) string {

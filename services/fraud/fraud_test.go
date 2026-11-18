@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sync"
 	"testing"
@@ -85,11 +86,19 @@ func TestFraudServerRejectsMissingIDs(t *testing.T) {
 func TestFraudServerRejectsInvalidCursor(t *testing.T) {
 	s := newTestStore(t)
 	server := NewFraudServer(s, Config{AlertThreshold: 60}, &fakePublisher{})
-	_, err := server.ListAlerts(context.Background(), &fraudpb.ListAlertsRequest{
-		AccountId: "acc-alerts", Limit: 2, Cursor: "!!!",
-	})
-	if status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("want InvalidArgument, got %v", err)
+	cursors := []string{
+		"!!!",
+		base64.RawURLEncoding.EncodeToString([]byte("1700000000000")),
+		base64.RawURLEncoding.EncodeToString([]byte("bad|00000000-0000-0000-0000-000000000000")),
+		base64.RawURLEncoding.EncodeToString([]byte("1700000000000|not-a-uuid")),
+	}
+	for _, cursor := range cursors {
+		_, err := server.ListAlerts(context.Background(), &fraudpb.ListAlertsRequest{
+			AccountId: "acc-alerts", Limit: 2, Cursor: cursor,
+		})
+		if status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("cursor %q: want InvalidArgument, got %v", cursor, err)
+		}
 	}
 }
 
