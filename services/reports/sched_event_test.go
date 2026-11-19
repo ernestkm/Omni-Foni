@@ -13,6 +13,9 @@ func TestReportReadyEventRoundTrip(t *testing.T) {
 		ScheduleId: "s1", ArtifactId: "a1", TenantId: "t1", ReportKind: "cdrs",
 		PeriodFrom: "2026-11-01T00:00:00Z", PeriodTo: "2026-11-02T00:00:00Z",
 		RowCount: 42, CreatedAtMs: 1763740800000,
+		RecipientEmail: "ops@example.test",
+		ArtifactUrl:    "http://localhost:50062/scheduled-reports/s1/artifacts/a1/download?exp=1763740800000&sig=abc",
+		ExpiresAtMs:    1763740800000,
 	}
 	b, err := proto.Marshal(in)
 	if err != nil {
@@ -23,7 +26,9 @@ func TestReportReadyEventRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	if out.GetScheduleId() != "s1" || out.GetArtifactId() != "a1" || out.GetTenantId() != "t1" ||
-		out.GetReportKind() != "cdrs" || out.GetRowCount() != 42 || out.GetCreatedAtMs() != 1763740800000 {
+		out.GetReportKind() != "cdrs" || out.GetRowCount() != 42 || out.GetCreatedAtMs() != 1763740800000 ||
+		out.GetRecipientEmail() != "ops@example.test" || out.GetArtifactUrl() != in.ArtifactUrl ||
+		out.GetExpiresAtMs() != 1763740800000 {
 		t.Fatalf("round trip mismatch: %+v", &out)
 	}
 }

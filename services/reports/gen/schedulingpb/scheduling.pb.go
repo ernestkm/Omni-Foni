@@ -24,17 +24,20 @@ const (
 // ReportReadyEvent announces one stored scheduled-report artifact on the
 // report.ready topic (docs/superpowers/specs/2026-11-17-scheduled-reports-design.md).
 type ReportReadyEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ScheduleId    string                 `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
-	ArtifactId    string                 `protobuf:"bytes,2,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
-	TenantId      string                 `protobuf:"bytes,3,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	ReportKind    string                 `protobuf:"bytes,4,opt,name=report_kind,json=reportKind,proto3" json:"report_kind,omitempty"`
-	PeriodFrom    string                 `protobuf:"bytes,5,opt,name=period_from,json=periodFrom,proto3" json:"period_from,omitempty"` // RFC3339 UTC
-	PeriodTo      string                 `protobuf:"bytes,6,opt,name=period_to,json=periodTo,proto3" json:"period_to,omitempty"`       // RFC3339 UTC
-	RowCount      int64                  `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
-	CreatedAtMs   int64                  `protobuf:"varint,8,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ScheduleId     string                 `protobuf:"bytes,1,opt,name=schedule_id,json=scheduleId,proto3" json:"schedule_id,omitempty"`
+	ArtifactId     string                 `protobuf:"bytes,2,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`
+	TenantId       string                 `protobuf:"bytes,3,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	ReportKind     string                 `protobuf:"bytes,4,opt,name=report_kind,json=reportKind,proto3" json:"report_kind,omitempty"`
+	PeriodFrom     string                 `protobuf:"bytes,5,opt,name=period_from,json=periodFrom,proto3" json:"period_from,omitempty"` // RFC3339 UTC
+	PeriodTo       string                 `protobuf:"bytes,6,opt,name=period_to,json=periodTo,proto3" json:"period_to,omitempty"`       // RFC3339 UTC
+	RowCount       int64                  `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
+	CreatedAtMs    int64                  `protobuf:"varint,8,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	RecipientEmail string                 `protobuf:"bytes,9,opt,name=recipient_email,json=recipientEmail,proto3" json:"recipient_email,omitempty"`
+	ArtifactUrl    string                 `protobuf:"bytes,10,opt,name=artifact_url,json=artifactUrl,proto3" json:"artifact_url,omitempty"`
+	ExpiresAtMs    int64                  `protobuf:"varint,11,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ReportReadyEvent) Reset() {
@@ -123,11 +126,32 @@ func (x *ReportReadyEvent) GetCreatedAtMs() int64 {
 	return 0
 }
 
+func (x *ReportReadyEvent) GetRecipientEmail() string {
+	if x != nil {
+		return x.RecipientEmail
+	}
+	return ""
+}
+
+func (x *ReportReadyEvent) GetArtifactUrl() string {
+	if x != nil {
+		return x.ArtifactUrl
+	}
+	return ""
+}
+
+func (x *ReportReadyEvent) GetExpiresAtMs() int64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
 var File_scheduling_v1_scheduling_proto protoreflect.FileDescriptor
 
 const file_scheduling_v1_scheduling_proto_rawDesc = "" +
 	"\n" +
-	"\x1escheduling/v1/scheduling.proto\x12\rscheduling.v1\"\x91\x02\n" +
+	"\x1escheduling/v1/scheduling.proto\x12\rscheduling.v1\"\x81\x03\n" +
 	"\x10ReportReadyEvent\x12\x1f\n" +
 	"\vschedule_id\x18\x01 \x01(\tR\n" +
 	"scheduleId\x12\x1f\n" +
@@ -140,7 +164,11 @@ const file_scheduling_v1_scheduling_proto_rawDesc = "" +
 	"periodFrom\x12\x1b\n" +
 	"\tperiod_to\x18\x06 \x01(\tR\bperiodTo\x12\x1b\n" +
 	"\trow_count\x18\a \x01(\x03R\browCount\x12\"\n" +
-	"\rcreated_at_ms\x18\b \x01(\x03R\vcreatedAtMsB#Z!omnifoni/reports/gen/schedulingpbb\x06proto3"
+	"\rcreated_at_ms\x18\b \x01(\x03R\vcreatedAtMs\x12'\n" +
+	"\x0frecipient_email\x18\t \x01(\tR\x0erecipientEmail\x12!\n" +
+	"\fartifact_url\x18\n" +
+	" \x01(\tR\vartifactUrl\x12\"\n" +
+	"\rexpires_at_ms\x18\v \x01(\x03R\vexpiresAtMsB#Z!omnifoni/reports/gen/schedulingpbb\x06proto3"
 
 var (
 	file_scheduling_v1_scheduling_proto_rawDescOnce sync.Once
