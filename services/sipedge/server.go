@@ -16,10 +16,11 @@ import (
 )
 
 type entry struct {
-	switchingID string
-	hEntry      string
-	hID         string
-	stopFailed  bool
+	switchingID  string
+	hEntry       string
+	hID          string
+	stopFailed   bool
+	stopRetrying bool
 }
 
 // store maps a Kamailio Call-ID to the live switching call it started.
@@ -56,8 +57,32 @@ func (s *store) markStopFailed(id, switchingID string) {
 	defer s.mu.Unlock()
 	if e, ok := s.m[id]; ok && e.switchingID == switchingID {
 		e.stopFailed = true
+		e.stopRetrying = false
 		s.m[id] = e
 	}
+}
+
+func (s *store) claimPendingStop(id, switchingID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok || !e.stopFailed || e.stopRetrying || e.switchingID != switchingID {
+		return false
+	}
+	e.stopRetrying = true
+	s.m[id] = e
+	return true
+}
+
+func (s *store) releasePendingStop(id, switchingID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok || !e.stopFailed || !e.stopRetrying || e.switchingID != switchingID {
+		return
+	}
+	e.stopRetrying = false
+	s.m[id] = e
 }
 
 func (s *store) takePendingStop(id, switchingID string) bool {

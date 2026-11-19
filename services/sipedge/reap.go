@@ -27,8 +27,12 @@ func (r *reaper) retryStops(ctx context.Context) {
 		if !snap.stopFailed {
 			continue
 		}
+		if !r.store.claimPendingStop(id, snap.switchingID) {
+			continue
+		}
 		if _, err := r.stop(ctx, snap.switchingID); err != nil {
 			slog.Warn("retry stop", "call", id, "err", err)
+			r.store.releasePendingStop(id, snap.switchingID)
 			continue
 		}
 		r.store.takePendingStop(id, snap.switchingID)

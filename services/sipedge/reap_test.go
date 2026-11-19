@@ -44,6 +44,41 @@ func stopCountingFacade(t *testing.T, failFirst int) (*facadeClient, *atomic.Int
 	return &facadeClient{base: srv.URL, http: srv.Client()}, stops
 }
 
+func TestClaimPendingStopIsSingleAndIdentityBound(t *testing.T) {
+	st := newStore()
+	st.put("ci", entry{switchingID: "old", stopFailed: true})
+	if !st.claimPendingStop("ci", "old") {
+		t.Fatal("first claim failed")
+	}
+	if st.claimPendingStop("ci", "old") {
+		t.Fatal("duplicate claim succeeded")
+	}
+	st.put("ci", entry{switchingID: "new", stopFailed: true})
+	if st.claimPendingStop("ci", "old") {
+		t.Fatal("stale claim succeeded")
+	}
+	if !st.claimPendingStop("ci", "new") {
+		t.Fatal("replacement claim failed")
+	}
+}
+
+func TestRetryStopsDoesNotRemoveReplacementEntry(t *testing.T) {
+	st := newStore()
+	st.put("ci", entry{switchingID: "old", stopFailed: true})
+	r := &reaper{store: st, stop: func(context.Context, string) (bool, error) {
+		st.put("ci", entry{switchingID: "new"})
+		return true, nil
+	}}
+	r.retryStops(context.Background())
+	e, ok := st.get("ci")
+	if !ok {
+		t.Fatal("replacement entry was removed")
+	}
+	if e.switchingID != "new" || e.stopFailed {
+		t.Fatalf("unexpected replacement entry: %+v", e)
+	}
+}
+
 func TestReaperRetriesPendingStopUntilSuccess(t *testing.T) {
 	facade, stops := stopCountingFacade(t, 1)
 	st := newStore()
