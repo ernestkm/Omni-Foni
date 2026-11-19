@@ -60,6 +60,40 @@ func (s *store) all() map[string]entry {
 	return out
 }
 
+type callLock struct {
+	token chan struct{}
+	refs  int
+}
+
+type callLocks struct {
+	mu    sync.Mutex
+	locks map[string]*callLock
+}
+
+func newCallLocks() *callLocks { return &callLocks{locks: map[string]*callLock{}} }
+
+func (l *callLocks) hold(id string) func() {
+	l.mu.Lock()
+	c, ok := l.locks[id]
+	if !ok {
+		c = &callLock{token: make(chan struct{}, 1)}
+		l.locks[id] = c
+	}
+	c.refs++
+	l.mu.Unlock()
+
+	c.token <- struct{}{}
+	return func() {
+		<-c.token
+		l.mu.Lock()
+		c.refs--
+		if c.refs == 0 && l.locks[id] == c {
+			delete(l.locks, id)
+		}
+		l.mu.Unlock()
+	}
+}
+
 const (
 	decisionTTL  = 64 * time.Second
 	maxDecisions = 4096
@@ -129,11 +163,15 @@ func (c *decisionCache) evictLocked(now time.Time) {
 }
 
 type sipedgeServer struct {
-	accounts  map[string]string
-	facade    facade
-	store     *store
-	decisions *decisionCache
-	cacheOnce sync.Once
+	accounts   map[string]string
+	facade     facade
+	store      *store
+	decisions  *decisionCache
+	cacheOnce  sync.Once
+	cancels    *decisionCache
+	cancelOnce sync.Once
+	locks      *callLocks
+	locksOnce  sync.Once
 }
 
 func (s *sipedgeServer) cache() *decisionCache {
@@ -143,6 +181,24 @@ func (s *sipedgeServer) cache() *decisionCache {
 		}
 	})
 	return s.decisions
+}
+
+func (s *sipedgeServer) cancelCache() *decisionCache {
+	s.cancelOnce.Do(func() {
+		if s.cancels == nil {
+			s.cancels = newDecisionCache()
+		}
+	})
+	return s.cancels
+}
+
+func (s *sipedgeServer) keyedLocks() *callLocks {
+	s.locksOnce.Do(func() {
+		if s.locks == nil {
+			s.locks = newCallLocks()
+		}
+	})
+	return s.locks
 }
 
 func (s *sipedgeServer) handler() http.Handler {
@@ -197,9 +253,16 @@ func (s *sipedgeServer) invite(w http.ResponseWriter, r *http.Request) {
 		trace.WithAttributes(attribute.String("source_ip", srcIP), attribute.String("call_id", ci)))
 	defer span.End()
 
+	unlock := s.keyedLocks().hold(ci)
+	defer unlock()
+
 	if d, ok := s.cache().get(ci); ok {
 		span.SetAttributes(attribute.Bool("decision.replay", true))
 		writeDecision(w, d)
+		return
+	}
+	if _, ok := s.cancelCache().get(ci); ok {
+		s.deny(ci, w, span, "canceled")
 		return
 	}
 	account, ok := s.accounts[srcIP]
@@ -239,6 +302,9 @@ func (s *sipedgeServer) bye(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 	body, _ := io.ReadAll(io.LimitReader(r.Body, 1024))
 	id := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(body)), "BYE "))
+	unlock := s.keyedLocks().hold(id)
+	defer unlock()
+	s.cancelCache().put(id, decision{status: http.StatusForbidden, body: "canceled"})
 	if e, ok := s.store.take(id); ok {
 		span.SetAttributes(attribute.String("call_id", e.switchingID))
 		_, _ = s.facade.stop(ctx, e.switchingID)

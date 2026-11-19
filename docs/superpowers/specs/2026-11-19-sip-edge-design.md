@@ -31,12 +31,15 @@ topology hiding, no digest auth.
 Three moving pieces, no new database:
 
 1. **Kamailio** (`kamailio` compose service, official 5.x image). Thin config:
-   - `dialog` module tracks every call established through the proxy.
-   - Trunk allow-list: source IPs of configured trunks; INVITEs from unknown
-     IPs are answered `403` locally (matches the SBC's IP-block posture).
+   - `dialog` module tracks every call established through the proxy. The
+     absolute cap is `dlg_set_timeout(max_seconds + 5)` together with
+     `modparam("dialog", "timeout_noreset", 1)`, so sequential requests
+     cannot extend the lifetime.
+   - The trunk allow-list lives in the shim env `SIPEDGE_TRUNK_ACCOUNTS`
+     (`ip=account,...`); an unknown source IP is denied `403 ip_blocked`.
    - `http_async_client` calls the shim on INVITE and BYE/CANCEL.
-   - `jsonrpcs` HTTP socket (default `:8080/rpc`) exposes `dlg_end_dlg` for
-     the reaper and accepts `dlg_set_lifetime`-style capping via config.
+   - `jsonrpcs` on `http://kamailio:5060/RPC` (internal HTTP over the existing
+     TCP port) exposes `dlg.end_dlg` for the reaper.
    - On allow: relays the INVITE to the trunk `target_uri` returned by the
      shim. On deny: replies `403`/`503` per mapping below.
 2. **Shim** (`services/sipedge`, `:50071`, env `SIPEDGE_SHIM_ADDR`). One Go
@@ -61,8 +64,9 @@ keeps only ephemeral dialog state (call_id → dialog meta) in memory.
 
 ## Call flow
 
-- INVITE arrives → Kamailio checks source IP against the trunk allow-list →
-  unknown: `403` locally; known: track dialog, POST `/invite`.
+- INVITE arrives → Kamailio tracks the dialog and POSTs `/invite` → the shim
+  checks the source IP against `SIPEDGE_TRUNK_ACCOUNTS` → unknown: denied
+  `403 ip_blocked`; known: continue through the policy chain.
 - Shim → facade `start` → existing chain (routing, LCR, SBC incl. fraud, OCS
   authorize). The LCR join now returns the trunk's `target_uri`; switching
   carries it on `StartCallResponse` (new proto field).
@@ -80,7 +84,7 @@ keeps only ephemeral dialog state (call_id → dialog meta) in memory.
 
 | Reason | SIP |
 |---|---|
-| `no_route`, `barring_destination`, `barring_cli`, `fraud_destination`, `fraud_cli`, `fraud_velocity_account`, `fraud_velocity_prefix`, `trunk_limit_exceeded`, `ip_blocked` | `403` |
+| `no_route`, `barring_destination`, `barring_cli`, `fraud_destination`, `fraud_cli`, `fraud_velocity_account`, `fraud_velocity_prefix`, `trunk_limit_exceeded`, `ip_blocked`, `canceled` | `403` |
 | `ocs_unavailable`, `routing_unavailable`, `sbc_unavailable`, `fraud_unavailable`, `no_rate`, `internal_error` | `503` |
 
 All denials carry `Reason: SIP;cause=<code>;text="<reason>"` and the reason in
@@ -103,16 +107,18 @@ an unrecognized reason is a control-plane problem, not a policy verdict).
 |---|---|---|
 | `SIPEDGE_SHIM_ADDR` | `:50071` | shim HTTP listen address |
 | `SIPEDGE_SWITCHING_HTTP` | `switching:50070` | switching facade base URL |
-| `SIPEDGE_KAMAILIO_RPC` | `http://localhost:8080/rpc` | Kamailio jsonrpcs endpoint |
+| `SIPEDGE_KAMAILIO_RPC` | `http://kamailio:5060/RPC` | Kamailio jsonrpcs endpoint |
 | `SIPEDGE_REAP_INTERVAL` | `1s` | reaper tick; `0` disables reaping |
 | `SWITCHING_HTTP_ADDR` | empty (disabled) | switching facade listen address |
-| `SIPEDGE_HTTP_TIMEOUT` | `5s` | shim→facade and shim→Kamailio HTTP timeout |
+| `SIPEDGE_TRUNK_ACCOUNTS` | empty | shim trunk allow-list (`ip=account,...`); unknown IP → `403 ip_blocked` |
 
-The dialog lifetime cap is `max_seconds + 5s` (fixed margin, set in
-Kamailio.cfg from the `start` response; no separate env).
+The absolute dialog lifetime cap is `dlg_set_timeout(max_seconds + 5)` with
+`modparam("dialog", "timeout_noreset", 1)` in Kamailio.cfg (fixed margin set
+from the `start` response; no separate env). Sequential requests do not reset
+the timeout.
 
-The trunk allow-list lives in Kamailio.cfg (compose-configured IP list); no
-DB-backed peer table this slice.
+The trunk allow-list lives in the shim env `SIPEDGE_TRUNK_ACCOUNTS`; there is
+no DB-backed peer table this slice.
 
 ## Compose topology
 
@@ -120,7 +126,7 @@ Two services, `kamailio` and `sipedge` (cleaner health checks and restart
 semantics than one container supervising two processes):
 
 - `kamailio`: official image, mounts `ops/kamailio/kamailio.cfg`, publishes
-  `5060/udp` + `5060/tcp`, exposes `8080` (jsonrpcs) internally only.
+  `5060/udp` + `5060/tcp`; jsonrpcs is served on the same TCP port at `/RPC`.
 - `sipedge`: Go image built from `services/sipedge`, internal only.
 - Both depend on `switching`; switching's image gains nothing except the new
   facade code.
@@ -157,7 +163,7 @@ semantics than one container supervising two processes):
      `cdrs.raw`/`cdrs.normalized` with correct seconds, and the OCS ledger
      billed to the cent.
   2. Denials: barred destination → `403` with reason; unknown source IP →
-     local `403`; facade disabled → `503`.
+     `403 ip_blocked` from the shim; facade disabled → `503`.
   3. Mid-call exhaustion: balance drained under a live call → dialog torn
      down (BYE observed) within ~2 s of the zero-balance tick.
 - **Smoke**: `ops/smoke.sh` adds an `ok: sip` step (one sipp call through the

@@ -32,7 +32,7 @@ func sipCode(reason string) int {
 	switch reason {
 	case "no_route", "barring_destination", "barring_cli", "fraud_destination",
 		"fraud_cli", "fraud_velocity_account", "fraud_velocity_prefix",
-		"trunk_limit_exceeded", "ip_blocked":
+		"trunk_limit_exceeded", "ip_blocked", "canceled":
 		return http.StatusForbidden
 	default:
 		return http.StatusServiceUnavailable

@@ -35,12 +35,17 @@ func (r *reaper) run(interval time.Duration) {
 
 // tick ends every tracked dialog whose switching call is no longer live.
 func (r *reaper) tick(ctx context.Context) error {
+	tracked := r.store.all()
 	live, err := r.live(ctx)
 	if err != nil {
 		return err
 	}
-	for id, e := range r.store.all() {
-		if live[e.switchingID] {
+	for id, snap := range tracked {
+		if live[snap.switchingID] {
+			continue
+		}
+		e, ok := r.store.get(id)
+		if !ok || e.switchingID != snap.switchingID {
 			continue
 		}
 		if err := r.kam.endDialog(ctx, e.hEntry, e.hID); err != nil {

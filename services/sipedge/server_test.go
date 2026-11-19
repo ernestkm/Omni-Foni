@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestParseAccounts(t *testing.T) {
@@ -55,7 +58,7 @@ func (f *fakeFacade) stop(ctx context.Context, id string) (bool, error) {
 	return true, nil
 }
 
-func newTestSipedge(t *testing.T, facade *fakeFacade) (*httptest.Server, *store) {
+func newTestSipedge(t *testing.T, facade facade) (*httptest.Server, *store) {
 	t.Helper()
 	st := newStore()
 	srv := &sipedgeServer{accounts: map[string]string{"172.28.0.1": "acc-a"}, facade: facade, store: st, decisions: newDecisionCache()}
@@ -63,6 +66,22 @@ func newTestSipedge(t *testing.T, facade *fakeFacade) (*httptest.Server, *store)
 	t.Cleanup(hs.Close)
 	return hs, st
 }
+
+type gatedFacade struct {
+	starts   atomic.Int64
+	entered  chan struct{}
+	once     sync.Once
+	startRes startResp
+}
+
+func (f *gatedFacade) start(context.Context, startReq) (startResp, error) {
+	f.starts.Add(1)
+	f.once.Do(func() { close(f.entered) })
+	time.Sleep(25 * time.Millisecond)
+	return f.startRes, nil
+}
+
+func (f *gatedFacade) stop(context.Context, string) (bool, error) { return true, nil }
 
 func TestInviteAllow(t *testing.T) {
 	f := &fakeFacade{startRes: startResp{Allowed: true, CallID: "sw-1", TargetURI: "sip:gw:5060", MaxSeconds: 300}}
@@ -116,6 +135,40 @@ func TestInviteDenyMapping(t *testing.T) {
 		if resp.StatusCode != tc.code {
 			t.Fatalf("%s: want %d, got %d", tc.reason, tc.code, resp.StatusCode)
 		}
+	}
+}
+
+func TestByeBeforeInviteCancelsBilling(t *testing.T) {
+	f := &fakeFacade{startRes: startResp{Allowed: true, CallID: "sw-cancel", TargetURI: "sip:gw:5060", MaxSeconds: 300}}
+	hs, st := newTestSipedge(t, f)
+
+	resp, err := http.Post(hs.URL+"/bye", "text/plain", strings.NewReader("BYE ci-cancel"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	resp, err = http.Post(hs.URL+"/invite", "text/plain",
+		strings.NewReader("ci-cancel|172.28.0.1|27820000000|27821110000|27821110000|1|2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("want 403, got %d", resp.StatusCode)
+	}
+	if got := string(body); got != "canceled" {
+		t.Fatalf("want canceled body, got %q", got)
+	}
+	if f.starts != 0 {
+		t.Fatalf("canceled call must not start billing, got %d starts", f.starts)
+	}
+	if _, ok := st.get("ci-cancel"); ok {
+		t.Fatal("canceled call was tracked")
 	}
 }
 
@@ -186,6 +239,54 @@ func TestInviteReplaysDecisionWithoutRestartingCall(t *testing.T) {
 	}
 	if bodies[0] != bodies[1] {
 		t.Fatalf("replay body differs: %q != %q", bodies[0], bodies[1])
+	}
+}
+
+func TestConcurrentInviteReplayStartsOnce(t *testing.T) {
+	f := &gatedFacade{
+		entered:  make(chan struct{}),
+		startRes: startResp{Allowed: true, CallID: "sw-concurrent", TargetURI: "sip:gw:5060", MaxSeconds: 300},
+	}
+	hs, _ := newTestSipedge(t, f)
+	invite := "ci-concurrent|172.28.0.1|27820000000|27821110000|27821110000|1|2"
+
+	type result struct {
+		status int
+		body   string
+	}
+	const n = 20
+	results := make(chan result, n)
+	for range n {
+		go func() {
+			resp, err := http.Post(hs.URL+"/invite", "text/plain", strings.NewReader(invite))
+			if err != nil {
+				results <- result{status: -1, body: err.Error()}
+				return
+			}
+			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			results <- result{status: resp.StatusCode, body: string(b)}
+		}()
+	}
+
+	<-f.entered
+
+	var first result
+	for i := range n {
+		r := <-results
+		if i == 0 {
+			first = r
+			continue
+		}
+		if r != first {
+			t.Errorf("replay %d differs: %+v != %+v", i, r, first)
+		}
+	}
+	if got := f.starts.Load(); got != 1 {
+		t.Fatalf("want exactly one facade start, got %d", got)
+	}
+	if first.status != http.StatusOK || first.body != "300|sip:gw:5060" {
+		t.Fatalf("unexpected decision: %+v", first)
 	}
 }
 

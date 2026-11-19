@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,15 +12,52 @@ import (
 	"omnifoni/observability"
 )
 
-func TestEndDialogTreatsNotFoundAsGone(t *testing.T) {
+func writeRawNotFound(t *testing.T, w http.ResponseWriter, reason, contentType, body string) {
+	t.Helper()
+	conn, buf, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer conn.Close()
+	_, _ = fmt.Fprintf(buf, "HTTP/1.1 404 %s\r\nContent-Type: %s\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+		reason, contentType, len(body), body)
+	_ = buf.Flush()
+}
+
+func TestEndDialogRejectsGenericNotFound(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
 	k := &kamRPC{base: srv.URL, http: srv.Client()}
+	if err := k.endDialog(context.Background(), "7", "9"); err == nil {
+		t.Fatal("generic 404 must be an error, not a gone dialog")
+	}
+}
+
+func TestEndDialogAcceptsDialogNotFoundStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeRawNotFound(t, w, "Dialog not found", "application/json", `{}`)
+	}))
+	defer srv.Close()
+
+	k := &kamRPC{base: srv.URL, http: srv.Client()}
 	if err := k.endDialog(context.Background(), "7", "9"); err != nil {
-		t.Fatalf("404 should mean gone, got %v", err)
+		t.Fatalf("dialog-gone 404 should mean gone, got %v", err)
+	}
+}
+
+func TestEndDialogAcceptsDialogNotFoundJSONError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeRawNotFound(t, w, "Not Found", "application/json", `{"error":{"message":"Dialog not found (7/9)"}}`)
+	}))
+	defer srv.Close()
+
+	k := &kamRPC{base: srv.URL, http: srv.Client()}
+	if err := k.endDialog(context.Background(), "7", "9"); err != nil {
+		t.Fatalf("dialog-gone JSON 404 should mean gone, got %v", err)
 	}
 }
 

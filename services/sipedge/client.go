@@ -134,7 +134,20 @@ func (k *kamRPC) endDialog(ctx context.Context, hEntry, hID string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return nil
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		if strings.Contains(resp.Status, "Dialog not found") {
+			return nil
+		}
+		var gone struct {
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(b, &gone) == nil && gone.Error != nil &&
+			strings.Contains(gone.Error.Message, "Dialog not found") {
+			return nil
+		}
+		return fmt.Errorf("kamailio rpc status 404: %s", strings.TrimSpace(string(b)))
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("kamailio rpc status %d", resp.StatusCode)
