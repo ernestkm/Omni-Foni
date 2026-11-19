@@ -27,16 +27,11 @@ func main() {
 
 	accounts := parseAccounts(os.Getenv("SIPEDGE_TRUNK_ACCOUNTS"))
 	facade := newFacadeClient(env("SIPEDGE_SWITCHING_HTTP", "http://switching:50070"))
-	rpc := &kamRPC{base: env("SIPEDGE_KAMAILIO_RPC", "http://kamailio:5060/RPC"), http: &http.Client{Timeout: 5 * time.Second}}
+	rpc := &kamRPC{base: env("SIPEDGE_KAMAILIO_RPC", "http://kamailio:5060/RPC"), http: instrumentedClient(5 * time.Second)}
 	st := newStore()
 
-	srv := &sipedgeServer{accounts: accounts, facade: facade, store: st}
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /invite", srv.invite)
-	mux.HandleFunc("POST /bye", srv.bye)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = w.Write([]byte("ok"))
-	})
+	srv := &sipedgeServer{accounts: accounts, facade: facade, store: st, decisions: newDecisionCache()}
+	handler := srv.handler()
 
 	if d := os.Getenv("SIPEDGE_REAP_INTERVAL"); d != "" && d != "0" {
 		dur, err := time.ParseDuration(d)
@@ -49,7 +44,7 @@ func main() {
 
 	addr := env("SIPEDGE_SHIM_ADDR", ":50071")
 	slog.Info("sipedge up", "addr", addr, "trunks", len(accounts))
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		slog.Error("serve", "err", err)
 		os.Exit(1)
 	}

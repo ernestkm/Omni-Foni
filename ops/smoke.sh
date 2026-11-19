@@ -37,7 +37,6 @@ docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INT
 docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INTO accounts(account_id,kind,balance,credit_limit) VALUES ('acc-sip-smoke','prepaid',100000,0) ON CONFLICT (account_id) DO UPDATE SET balance=EXCLUDED.balance, kind='prepaid', credit_limit=0" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled,target_uri) VALUES ('trunk-sip',true,'sip:sipuas:5060') ON CONFLICT (trunk_id) DO UPDATE SET enabled=true, target_uri=EXCLUDED.target_uri" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
-docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2783','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2788','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled) VALUES ('trunk-smoke',true) ON CONFLICT (trunk_id) DO UPDATE SET enabled=true" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-smoke',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
@@ -54,14 +53,19 @@ echo "ok: reports csv"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 (cd services/reports && go run ./cmd/smokelive) || fail "live calls probe"
 (cd services/fraud && go run ./cmd/fraudsmoke) || fail "fraud probe"
-(cd services/sipedge && SIP_SMOKE_DEST=27821110000 go run ./cmd/sipsmoke >/dev/null) || fail "sip probe"
-sip_sessions=$(docker exec omni-fon-postgres-1 psql -U postgres -d charging -At -c "SELECT count(*) FROM sessions WHERE account_id='acc-sip-smoke'")
-[ "${sip_sessions:-0}" -ge 1 ] || fail "sip call not billed"
-echo "ok: sip"
-(cd services/sipedge && SIP_SMOKE_DEST=27829990000 SIP_SMOKE_MODE=deny go run ./cmd/sipsmoke >/dev/null) || fail "sip deny probe"
+sip_call="smoke-sip-$(date +%s%N)"
+sip_before=$(docker exec omni-fon-postgres-1 psql -U postgres -d charging -At -c "SELECT count(*) FROM sessions WHERE account_id='acc-sip-smoke'")
+(cd services/sipedge && SIP_SMOKE_CALL_ID="$sip_call" SIP_SMOKE_DEST=27821110000 go run ./cmd/sipsmoke >/dev/null) || fail "sip probe"
+sip_after=$(docker exec omni-fon-postgres-1 psql -U postgres -d charging -At -c "SELECT count(*) FROM sessions WHERE account_id='acc-sip-smoke'")
+[ "${sip_after:-0}" -gt "${sip_before:-0}" ] || fail "sip call not billed"
+echo "ok: sip ($sip_call)"
+sip_deny_call="smoke-deny-$(date +%s%N)"
+sip_deny_out=$(cd services/sipedge && SIP_SMOKE_CALL_ID="$sip_deny_call" SIP_SMOKE_DEST=27829990000 SIP_SMOKE_MODE=deny go run ./cmd/sipsmoke) || fail "sip deny probe"
+echo "$sip_deny_out" | grep -q "^call_id=$sip_deny_call$" || fail "sip deny call id"
+echo "$sip_deny_out" | grep -q '^reason=barring_destination$' || fail "sip deny reason"
 echo "ok: sip deny"
 docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "UPDATE accounts SET balance=10 WHERE account_id='acc-sip-smoke'" >/dev/null
-(cd services/sipedge && SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke >/dev/null) || fail "sip exhaust probe"
+(cd services/sipedge && SIP_SMOKE_CALL_ID="smoke-exhaust-$(date +%s%N)" SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke >/dev/null) || fail "sip exhaust probe"
 echo "ok: sip exhaust"
 
 sched=$(curl -fsS -X POST -H 'Authorization: Bearer tok-smoke' -H 'Content-Type: application/json' \

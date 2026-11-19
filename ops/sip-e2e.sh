@@ -28,20 +28,23 @@ docker compose up -d sipuas
 seed_rate 2782 0.010000
 seed_account acc-sip-smoke 100000
 seed_route trunk-e2e 2782
-(cd services/sipedge && SIP_SMOKE_DEST=27821110000 go run ./cmd/sipsmoke) || fail "answer call"
+answer_call="e2e-answer-$(date +%s%N)"
+answer_cli="2782$(date +%N)"
+answer_out=$(cd services/sipedge && SIP_SMOKE_CALL_ID="$answer_call" SIP_SMOKE_FROM="$answer_cli" SIP_SMOKE_DEST=27821110000 go run ./cmd/sipsmoke) || fail "answer call"
+echo "$answer_out" | grep -q "^call_id=$answer_call$" || fail "answer call id"
 cdr=$(docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic cdrs.normalized \
-  --from-beginning --max-messages 50 --timeout-ms 5000 2>/dev/null | grep -c 'acc-sip-smoke' || true)
-[ "$cdr" -ge 1 ] || fail "no cdr for acc-sip-smoke"
+  --bootstrap-server localhost:9092 --topic cdrs.normalized --group "sip-e2e-$answer_cli" \
+  --from-beginning --timeout-ms 8000 2>/dev/null | grep -aFc "$answer_cli" || true)
+[ "$cdr" -ge 1 ] || fail "no call-specific cdr for $answer_cli"
 echo "ok: sip e2e answer + cdr"
 
 # 2. Denial path: barring rule returns 403.
 docker exec omni-fon-postgres-1 psql -U postgres -d sbc -qAt -c \
   "INSERT INTO barring_rules(match_type,prefix,action) SELECT 'destination','27829999','deny' WHERE NOT EXISTS (SELECT 1 FROM barring_rules WHERE prefix='27829999')" >/dev/null
-seed_rate 2783 0.010000
-seed_account acc-sip-smoke 100000
-seed_route trunk-deny 2783
-(cd services/sipedge && SIP_SMOKE_DEST=27829990000 SIP_SMOKE_MODE=deny go run ./cmd/sipsmoke) || fail "deny call"
+deny_call="e2e-deny-$(date +%s%N)"
+deny_out=$(cd services/sipedge && SIP_SMOKE_CALL_ID="$deny_call" SIP_SMOKE_DEST=27829990000 SIP_SMOKE_MODE=deny go run ./cmd/sipsmoke) || fail "deny call"
+echo "$deny_out" | grep -q "^call_id=$deny_call$" || fail "deny call id"
+echo "$deny_out" | grep -q '^reason=barring_destination$' || fail "deny reason"
 echo "ok: sip e2e deny"
 
 # 3. Exhaustion path: 1 s of authorization at a high rate, expect BYE
@@ -49,7 +52,8 @@ echo "ok: sip e2e deny"
 seed_rate 2788 100000.000000
 seed_account acc-sip-smoke 100000
 seed_route trunk-exh 2788
-(cd services/sipedge && SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke) || fail "exhaust call"
+exhaust_call="e2e-exhaust-$(date +%s%N)"
+(cd services/sipedge && SIP_SMOKE_CALL_ID="$exhaust_call" SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke) || fail "exhaust call"
 echo "ok: sip e2e exhaust"
 
 echo "ok: sip e2e"

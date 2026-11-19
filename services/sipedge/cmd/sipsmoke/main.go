@@ -26,15 +26,15 @@ func main() {
 	}
 	defer conn.Close()
 
-	callID := fmt.Sprintf("sipsmoke-%d", time.Now().UnixNano())
+	id := callID()
 	tag := fmt.Sprintf("%d", time.Now().UnixNano())
 	via := fmt.Sprintf("Via: SIP/2.0/UDP %s;branch=z9hG4bK%s;rport", localAddr(conn), tag)
 	invite := "INVITE sip:" + dest + "@edge SIP/2.0\r\n" +
 		via + "\r\n" +
 		"Max-Forwards: 70\r\n" +
-		"From: <sip:" + from + ">;tag=" + tag + "\r\n" +
+		"From: <" + fromURI(from) + ">;tag=" + tag + "\r\n" +
 		"To: <sip:" + dest + ">\r\n" +
-		"Call-ID: " + callID + "\r\n" +
+		"Call-ID: " + id + "\r\n" +
 		"CSeq: 1 INVITE\r\n" +
 		"Contact: <sip:sipsmoke@" + localAddr(conn) + ">\r\n" +
 		"Content-Length: 0\r\n\r\n"
@@ -67,12 +67,24 @@ func main() {
 	if final == "" || !(strings.HasPrefix(final, "SIP/2.0 200") || strings.HasPrefix(final, "SIP/2.0 4") || strings.HasPrefix(final, "SIP/2.0 5") || strings.HasPrefix(final, "SIP/2.0 6")) {
 		fail("no final response")
 	}
+	fmt.Printf("call_id=%s\n", id)
+	fmt.Printf("status=%s\n", firstLine(final))
+	if reason := reasonHeader(final); reason != "" {
+		fmt.Printf("reason=%s\n", reason)
+	}
 
 	switch mode {
 	case "deny":
 		if !strings.HasPrefix(final, "SIP/2.0 403") {
 			fail("want 403, got: %s", firstLine(final))
 		}
+		ack := "ACK sip:" + dest + "@edge SIP/2.0\r\n" + via + "\r\n" +
+			"Max-Forwards: 70\r\n" +
+			"From: <" + fromURI(from) + ">;tag=" + tag + "\r\n" +
+			"To: " + toLine(final) + "\r\n" +
+			"Call-ID: " + id + "\r\n" +
+			"CSeq: 1 ACK\r\nContent-Length: 0\r\n\r\n"
+		_, _ = conn.WriteToUDP([]byte(ack), raddr)
 		fmt.Println("ok: sip deny")
 		return
 	}
@@ -86,9 +98,9 @@ func main() {
 	}
 	ack := "ACK " + targetURI + " SIP/2.0\r\n" + via + "\r\n" +
 		"Max-Forwards: 70\r\n" +
-		"From: <sip:" + from + ">;tag=" + tag + "\r\n" +
+		"From: <" + fromURI(from) + ">;tag=" + tag + "\r\n" +
 		"To: " + toLine(final) + "\r\n" +
-		"Call-ID: " + callID + "\r\n" +
+		"Call-ID: " + id + "\r\n" +
 		"CSeq: 1 ACK\r\nContent-Length: 0\r\n\r\n"
 	_, _ = conn.WriteToUDP([]byte(ack), raddr)
 
@@ -119,9 +131,9 @@ func main() {
 	time.Sleep(1500 * time.Millisecond)
 	bye := "BYE " + targetURI + " SIP/2.0\r\n" + via + "\r\n" +
 		"Max-Forwards: 70\r\n" +
-		"From: <sip:" + from + ">;tag=" + tag + "\r\n" +
+		"From: <" + fromURI(from) + ">;tag=" + tag + "\r\n" +
 		"To: " + toLine(final) + "\r\n" +
-		"Call-ID: " + callID + "\r\n" +
+		"Call-ID: " + id + "\r\n" +
 		"CSeq: 2 BYE\r\nContent-Length: 0\r\n\r\n"
 	_, _ = conn.WriteToUDP([]byte(bye), raddr)
 
@@ -178,6 +190,36 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func callID() string {
+	if v := os.Getenv("SIP_SMOKE_CALL_ID"); v != "" {
+		return v
+	}
+	return fmt.Sprintf("sipsmoke-%d", time.Now().UnixNano())
+}
+
+func fromURI(from string) string {
+	if strings.HasPrefix(from, "sip:") || strings.HasPrefix(from, "sips:") {
+		if strings.Contains(from, "@") {
+			return from
+		}
+		return from + "@edge"
+	}
+	return "sip:" + from + "@edge"
+}
+
+func reasonHeader(msg string) string {
+	for _, line := range strings.Split(msg, "\r\n") {
+		if !strings.HasPrefix(line, "Reason:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(line, "Reason:"))
+		if i := strings.Index(value, "text="); i >= 0 {
+			return strings.Trim(strings.TrimSpace(value[i+len("text="):]), `"`)
+		}
+	}
+	return ""
 }
 
 func fail(format string, args ...any) {
@@ -241,7 +283,7 @@ func localAddr(c *net.UDPConn) string {
 			return fmt.Sprintf("%s:%d", host, port)
 		}
 	}
-	ra, err := net.ResolveUDPAddr("udp", "127.0.0.1:5060")
+	ra, err := net.ResolveUDPAddr("udp", "8.8.8.8:5060")
 	if err == nil {
 		if d, err := net.DialUDP("udp", nil, ra); err == nil {
 			a, ok := d.LocalAddr().(*net.UDPAddr)
@@ -251,5 +293,6 @@ func localAddr(c *net.UDPConn) string {
 			}
 		}
 	}
-	return fmt.Sprintf("127.0.0.1:%d", port)
+	fail("cannot determine a usable contact host; set SIP_SMOKE_CONTACT_HOST")
+	return ""
 }

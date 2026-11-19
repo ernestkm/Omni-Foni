@@ -39,6 +39,19 @@ func sipCode(reason string) int {
 	}
 }
 
+func safeReason(reason string) string {
+	if reason == "" || len(reason) > 64 {
+		return "policy_denied"
+	}
+	for _, r := range reason {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
+			continue
+		}
+		return "policy_denied"
+	}
+	return reason
+}
+
 // userPart extracts the user portion of a SIP URI, e.g. "sip:2782111@h" -> "2782111".
 func userPart(uri string) string {
 	uri = strings.TrimPrefix(uri, "sip:")

@@ -83,6 +83,44 @@ func TestFacadeStartBadInput(t *testing.T) {
 	}
 }
 
+func TestFacadeStartReturnsTrunkID(t *testing.T) {
+	seed(t, "acc-trunk-http", 100000, "2782", "0.010000")
+	reg := NewRegistry().WithRouting(fixedResolver{"trunk-a", "sip:gw:5060"})
+	srv, _ := facadeTestServer(t, reg)
+
+	resp, err := http.Post(srv.URL+"/start", "application/json",
+		strings.NewReader(`{"account_id":"acc-trunk-http","destination":"27821110000","cli":"27820000000"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Allowed bool   `json:"allowed"`
+		CallID  string `json:"call_id"`
+		TrunkID string `json:"trunk_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.Allowed || out.TrunkID != "trunk-a" {
+		t.Fatalf("unexpected start response: %+v", out)
+	}
+	_, _ = http.Post(srv.URL+"/stop", "application/json",
+		strings.NewReader(`{"call_id":"`+out.CallID+`"}`))
+}
+
+func TestFacadeResponseHasRequestID(t *testing.T) {
+	srv, _ := facadeTestServer(t, NewRegistry())
+	resp, err := http.Post(srv.URL+"/start", "application/json", strings.NewReader(`{"cli":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.Header.Get("x-request-id") == "" {
+		t.Fatal("missing request id header")
+	}
+}
+
 func TestFacadeLiveListsCalls(t *testing.T) {
 	seed(t, "acc-live-facade", 100000, "2782", "0.010000")
 	reg := NewRegistry().WithRouting(fixedResolver{"trunk-a", "sip:gw:5060"})

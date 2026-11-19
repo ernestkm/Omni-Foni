@@ -122,6 +122,16 @@ func (r *Registry) WithSBC(s SbcChecker) *Registry {
 	return r
 }
 
+func (r *Registry) callTrunkID(callID string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c := r.calls[callID]
+	if c == nil {
+		return ""
+	}
+	return c.trunkID
+}
+
 // StartCall resolves the dial plan, runs the SBC playbook, then authorizes
 // with the OCS. Unrouted numbers, barred calls, trunk-limit rejections,
 // routing/SBC/OCS outages, and denials are all fail-closed: no call is

@@ -9,7 +9,21 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+
+	"omnifoni/observability"
 )
+
+func instrumentedClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout, Transport: otelhttp.NewTransport(http.DefaultTransport)}
+}
+
+func propagateRequestID(ctx context.Context, req *http.Request) {
+	if id := observability.RequestIDFrom(ctx); id != "" {
+		req.Header.Set("x-request-id", id)
+	}
+}
 
 type startReq struct {
 	AccountID   string `json:"account_id"`
@@ -38,7 +52,7 @@ type facadeClient struct {
 }
 
 func newFacadeClient(base string) *facadeClient {
-	return &facadeClient{base: base, http: &http.Client{Timeout: 5 * time.Second}}
+	return &facadeClient{base: base, http: instrumentedClient(5 * time.Second)}
 }
 
 func (f *facadeClient) start(ctx context.Context, req startReq) (startResp, error) {
@@ -87,6 +101,7 @@ func (f *facadeClient) do(ctx context.Context, method, path string, in, out any)
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	propagateRequestID(ctx, req)
 	resp, err := f.http.Do(req)
 	if err != nil {
 		return err
@@ -112,11 +127,15 @@ func (k *kamRPC) endDialog(ctx context.Context, hEntry, hID string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	propagateRequestID(ctx, req)
 	resp, err := k.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("kamailio rpc status %d", resp.StatusCode)
 	}

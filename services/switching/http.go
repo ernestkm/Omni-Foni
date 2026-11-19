@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"omnifoni/observability"
 	pb "omnifoni/switching/gen/switchingpb"
 )
 
@@ -24,6 +25,7 @@ type startResp struct {
 	SessionID  string `json:"session_id,omitempty"`
 	MaxSeconds int64  `json:"max_seconds,omitempty"`
 	TargetURI  string `json:"target_uri,omitempty"`
+	TrunkID    string `json:"trunk_id,omitempty"`
 }
 
 type liveCall struct {
@@ -64,6 +66,7 @@ func newFacade(reg *Registry, cc *grpc.ClientConn) http.Handler {
 			Allowed: res.GetAllowed(), Reason: res.GetReason(),
 			CallID: res.GetCallId(), SessionID: res.GetSessionId(),
 			MaxSeconds: res.GetMaxSeconds(), TargetURI: res.GetTargetUri(),
+			TrunkID: reg.callTrunkID(res.GetCallId()),
 		})
 	})
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +100,7 @@ func newFacade(reg *Registry, cc *grpc.ClientConn) http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
-	return mux
+	return observability.Middleware(mux)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {
