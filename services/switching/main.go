@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
@@ -85,6 +86,16 @@ func main() {
 		}
 		reg = reg.WithSBC(sbcClient{sbcpb.NewSbcClient(scc)})
 		slog.Info("sbc wired", "addr", sbcAddr)
+	}
+
+	if httpAddr := os.Getenv("SWITCHING_HTTP_ADDR"); httpAddr != "" {
+		hs := &http.Server{Addr: httpAddr, Handler: newFacade(reg, cc), ReadHeaderTimeout: 5 * time.Second}
+		go func() {
+			if err := hs.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("http facade", "err", err)
+			}
+		}()
+		slog.Info("switching http facade", "addr", httpAddr)
 	}
 
 	lis, err := net.Listen("tcp", addr)
