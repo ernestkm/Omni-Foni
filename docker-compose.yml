@@ -355,7 +355,7 @@ services:
     build:
       context: ./services
       dockerfile: sipedge/Dockerfile
-    command: ["/sipuas"]
+    entrypoint: ["/sipuas"]
     environment:
       SIPUAS_ADDR: ":5060"
     networks: [sip]

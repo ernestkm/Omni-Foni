@@ -19,7 +19,7 @@ docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
 docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || fail "kafka"
 
-for s in charging switching mediation billing payments identity routing sbc fraud reconciliation reports; do
+for s in charging switching mediation billing payments identity routing sbc fraud reconciliation reports kamailio sipedge sipuas; do
   st=$(docker inspect --format '{{.State.Status}}' "omni-fon-$s-1" 2>/dev/null || echo missing)
   [ "$st" = "running" ] || fail "$s not running ($st)"
   echo "ok: $s running"
@@ -32,9 +32,16 @@ fi
 uid=$(docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO users(tenant_id,email,password_hash,role) VALUES ('$tid','smoke@local','x','admin') ON CONFLICT (email) DO UPDATE SET tenant_id=EXCLUDED.tenant_id RETURNING user_id")
 docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO sessions(token,user_id,expires_at) VALUES ('tok-smoke','$uid',now()+interval '1 hour') ON CONFLICT (token) DO UPDATE SET expires_at=now()+interval '1 hour'" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d catalogue -qAt -c "INSERT INTO rates(prefix,rate_per_sec) VALUES ('2782',0.010000) ON CONFLICT (prefix) DO UPDATE SET rate_per_sec=EXCLUDED.rate_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d catalogue -qAt -c "INSERT INTO rates(prefix,rate_per_sec) VALUES ('2788',5.000000) ON CONFLICT (prefix) DO UPDATE SET rate_per_sec=EXCLUDED.rate_per_sec" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INTO accounts(account_id,kind,balance,credit_limit) VALUES ('acc-smoke-live','prepaid',100000,0) ON CONFLICT (account_id) DO UPDATE SET balance=EXCLUDED.balance, kind='prepaid', credit_limit=0" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "INSERT INTO accounts(account_id,kind,balance,credit_limit) VALUES ('acc-sip-smoke','prepaid',100000,0) ON CONFLICT (account_id) DO UPDATE SET balance=EXCLUDED.balance, kind='prepaid', credit_limit=0" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled,target_uri) VALUES ('trunk-sip',true,'sip:sipuas:5060') ON CONFLICT (trunk_id) DO UPDATE SET enabled=true, target_uri=EXCLUDED.target_uri" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2783','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2788','trunk-sip',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO trunks(trunk_id,enabled) VALUES ('trunk-smoke',true) ON CONFLICT (trunk_id) DO UPDATE SET enabled=true" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d routing -qAt -c "INSERT INTO lcr_routes(prefix,trunk_id,cost_per_sec) VALUES ('2782','trunk-smoke',1) ON CONFLICT (prefix,trunk_id) DO UPDATE SET cost_per_sec=EXCLUDED.cost_per_sec" >/dev/null
+docker exec omni-fon-postgres-1 psql -U postgres -d sbc -qAt -c "INSERT INTO barring_rules(match_type,prefix,action) SELECT 'destination','27829990','deny' WHERE NOT EXISTS (SELECT 1 FROM barring_rules WHERE match_type='destination' AND prefix='27829990' AND action='deny')" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d fraud -qAt -c "INSERT INTO fraud_controls(account_id,max_calls_per_day,max_calls_per_prefix_day,enabled) VALUES ('acc-smoke-fraud',1,NULL,true) ON CONFLICT (account_id) DO UPDATE SET max_calls_per_day=EXCLUDED.max_calls_per_day, max_calls_per_prefix_day=EXCLUDED.max_calls_per_prefix_day, enabled=true" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d fraud -qAt -c "INSERT INTO risk_prefixes(prefix,weight) VALUES ('900',30) ON CONFLICT (prefix) DO UPDATE SET weight=EXCLUDED.weight" >/dev/null
 docker exec omni-fon-postgres-1 psql -U postgres -d identity -qAt -c "INSERT INTO accounts(account_id,tenant_id,created_by) VALUES ('acc-smoke-live','$tid','$uid') ON CONFLICT (account_id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id, created_by=EXCLUDED.created_by" >/dev/null
@@ -47,6 +54,15 @@ echo "ok: reports csv"
 (cd services/reports && go run ./cmd/smokereports) || fail "reports probe"
 (cd services/reports && go run ./cmd/smokelive) || fail "live calls probe"
 (cd services/fraud && go run ./cmd/fraudsmoke) || fail "fraud probe"
+(cd services/sipedge && SIP_SMOKE_DEST=27821110000 go run ./cmd/sipsmoke >/dev/null) || fail "sip probe"
+sip_sessions=$(docker exec omni-fon-postgres-1 psql -U postgres -d charging -At -c "SELECT count(*) FROM sessions WHERE account_id='acc-sip-smoke'")
+[ "${sip_sessions:-0}" -ge 1 ] || fail "sip call not billed"
+echo "ok: sip"
+(cd services/sipedge && SIP_SMOKE_DEST=27829990000 SIP_SMOKE_MODE=deny go run ./cmd/sipsmoke >/dev/null) || fail "sip deny probe"
+echo "ok: sip deny"
+docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "UPDATE accounts SET balance=10 WHERE account_id='acc-sip-smoke'" >/dev/null
+(cd services/sipedge && SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke >/dev/null) || fail "sip exhaust probe"
+echo "ok: sip exhaust"
 
 sched=$(curl -fsS -X POST -H 'Authorization: Bearer tok-smoke' -H 'Content-Type: application/json' \
   -d '{"report_kind":"cdrs","window_kind":"previous_month","frequency":"daily","at_hour":0,"at_minute":0}' \
@@ -68,7 +84,7 @@ echo "ok: scheduled report"
 # The probes call reconciliation, reports and fraud, so the trace backend must
 # have spans for all of them; otherwise tracing is broken.
 services=$(curl -fsS http://localhost:16686/api/services) || fail "jaeger api"
-for s in reconciliation billing payments reports fraud; do
+for s in reconciliation billing payments reports fraud sipedge; do
   echo "$services" | grep -q "\"$s\"" || fail "no traces for $s"
   echo "ok: traces for $s"
 done
