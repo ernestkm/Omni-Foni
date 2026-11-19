@@ -15,10 +15,24 @@ type reaper struct {
 	store *store
 	kam   dialogKiller
 	live  func(ctx context.Context) (map[string]bool, error)
+	stop  func(ctx context.Context, id string) (bool, error)
 }
 
 func newReaper(f *facadeClient, kam *kamRPC, st *store) *reaper {
-	return &reaper{store: st, kam: kam, live: f.live}
+	return &reaper{store: st, kam: kam, live: f.live, stop: f.stop}
+}
+
+func (r *reaper) retryStops(ctx context.Context) {
+	for id, snap := range r.store.all() {
+		if !snap.stopFailed {
+			continue
+		}
+		if _, err := r.stop(ctx, snap.switchingID); err != nil {
+			slog.Warn("retry stop", "call", id, "err", err)
+			continue
+		}
+		r.store.takePendingStop(id, snap.switchingID)
+	}
 }
 
 func (r *reaper) run(interval time.Duration) {
@@ -33,15 +47,16 @@ func (r *reaper) run(interval time.Duration) {
 	}
 }
 
-// tick ends every tracked dialog whose switching call is no longer live.
+// tick retries failed stops and ends every tracked dialog whose switching call is no longer live.
 func (r *reaper) tick(ctx context.Context) error {
+	r.retryStops(ctx)
 	tracked := r.store.all()
 	live, err := r.live(ctx)
 	if err != nil {
 		return err
 	}
 	for id, snap := range tracked {
-		if live[snap.switchingID] {
+		if snap.stopFailed || live[snap.switchingID] {
 			continue
 		}
 		e, ok := r.store.get(id)

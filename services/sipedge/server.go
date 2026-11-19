@@ -19,6 +19,7 @@ type entry struct {
 	switchingID string
 	hEntry      string
 	hID         string
+	stopFailed  bool
 }
 
 // store maps a Kamailio Call-ID to the live switching call it started.
@@ -48,6 +49,26 @@ func (s *store) take(id string) (entry, bool) {
 	e, ok := s.m[id]
 	delete(s.m, id)
 	return e, ok
+}
+
+func (s *store) markStopFailed(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if e, ok := s.m[id]; ok {
+		e.stopFailed = true
+		s.m[id] = e
+	}
+}
+
+func (s *store) takePendingStop(id, switchingID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok || !e.stopFailed || e.switchingID != switchingID {
+		return false
+	}
+	delete(s.m, id)
+	return true
 }
 
 func (s *store) all() map[string]entry {
@@ -138,6 +159,12 @@ func (c *decisionCache) put(id string, d decision) {
 		c.evictLocked(now)
 	}
 	c.items[id] = cachedDecision{decision: d, createdAt: now, expiresAt: now.Add(decisionTTL)}
+}
+
+func (c *decisionCache) delete(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.items, id)
 }
 
 func (c *decisionCache) evictLocked(now time.Time) {
@@ -256,13 +283,13 @@ func (s *sipedgeServer) invite(w http.ResponseWriter, r *http.Request) {
 	unlock := s.keyedLocks().hold(ci)
 	defer unlock()
 
+	if _, ok := s.cancelCache().get(ci); ok {
+		s.deny(ci, w, span, "canceled")
+		return
+	}
 	if d, ok := s.cache().get(ci); ok {
 		span.SetAttributes(attribute.Bool("decision.replay", true))
 		writeDecision(w, d)
-		return
-	}
-	if _, ok := s.cancelCache().get(ci); ok {
-		s.deny(ci, w, span, "canceled")
 		return
 	}
 	account, ok := s.accounts[srcIP]
@@ -305,9 +332,15 @@ func (s *sipedgeServer) bye(w http.ResponseWriter, r *http.Request) {
 	unlock := s.keyedLocks().hold(id)
 	defer unlock()
 	s.cancelCache().put(id, decision{status: http.StatusForbidden, body: "canceled"})
-	if e, ok := s.store.take(id); ok {
+	s.cache().delete(id)
+	if e, ok := s.store.get(id); ok {
 		span.SetAttributes(attribute.String("call_id", e.switchingID))
-		_, _ = s.facade.stop(ctx, e.switchingID)
+		if _, err := s.facade.stop(ctx, e.switchingID); err != nil {
+			span.SetAttributes(attribute.String("stop_error", err.Error()))
+			s.store.markStopFailed(id)
+		} else {
+			s.store.take(id)
+		}
 	}
 	w.WriteHeader(http.StatusOK)
 }

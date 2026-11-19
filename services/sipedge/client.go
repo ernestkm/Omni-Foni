@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,8 +122,24 @@ type kamRPC struct {
 }
 
 func (k *kamRPC) endDialog(ctx context.Context, hEntry, hID string) error {
-	body := `{"jsonrpc":"2.0","method":"dlg.end_dlg","params":[` + hEntry + `,` + hID + `],"id":1}`
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, k.base, strings.NewReader(body))
+	he, err := strconv.ParseInt(hEntry, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid dialog h_entry %q: %w", hEntry, err)
+	}
+	hi, err := strconv.ParseInt(hID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid dialog h_id %q: %w", hID, err)
+	}
+	body, err := json.Marshal(struct {
+		JSONRPC string  `json:"jsonrpc"`
+		Method  string  `json:"method"`
+		Params  []int64 `json:"params"`
+		ID      int     `json:"id"`
+	}{JSONRPC: "2.0", Method: "dlg.end_dlg", Params: []int64{he, hi}, ID: 1})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, k.base, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

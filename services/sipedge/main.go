@@ -17,6 +17,20 @@ func env(key, def string) string {
 	return def
 }
 
+func reapInterval(raw string) (time.Duration, bool, error) {
+	if raw == "" {
+		raw = "1s"
+	}
+	if raw == "0" {
+		return 0, false, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, false, err
+	}
+	return d, true, nil
+}
+
 func main() {
 	observability.SetupLogging("sipedge")
 	shutdown, err := observability.Init(context.Background(), "sipedge")
@@ -33,12 +47,12 @@ func main() {
 	srv := &sipedgeServer{accounts: accounts, facade: facade, store: st, decisions: newDecisionCache()}
 	handler := srv.handler()
 
-	if d := os.Getenv("SIPEDGE_REAP_INTERVAL"); d != "" && d != "0" {
-		dur, err := time.ParseDuration(d)
-		if err != nil {
-			slog.Error("reap interval", "err", err)
-			os.Exit(1)
-		}
+	dur, on, err := reapInterval(env("SIPEDGE_REAP_INTERVAL", "1s"))
+	if err != nil {
+		slog.Error("reap interval", "err", err)
+		os.Exit(1)
+	}
+	if on {
 		go newReaper(facade, rpc, st).run(dur)
 	}
 

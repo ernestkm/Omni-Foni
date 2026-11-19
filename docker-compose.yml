@@ -343,6 +343,7 @@ services:
       - ./ops/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
     ports:
       - "5060:5060/udp"
+      - "5060:5060/tcp"
     depends_on:
       - sipedge
     networks: [sip]

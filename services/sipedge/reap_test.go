@@ -2,6 +2,12 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -13,6 +19,74 @@ type fakeKam struct {
 func (f *fakeKam) endDialog(_ context.Context, hEntry, hID string) error {
 	f.ended = append(f.ended, [2]string{hEntry, hID})
 	return f.err
+}
+
+func stopCountingFacade(t *testing.T, failFirst int) (*facadeClient, *atomic.Int64) {
+	t.Helper()
+	stops := &atomic.Int64{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/live":
+			_, _ = io.WriteString(w, `{"calls":[]}`)
+		case "/stop":
+			n := stops.Add(1)
+			if int(n) <= failFirst {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = io.WriteString(w, "facade down")
+				return
+			}
+			fmt.Fprintf(w, `{"stopped":%t}`, int(n) > failFirst)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return &facadeClient{base: srv.URL, http: srv.Client()}, stops
+}
+
+func TestReaperRetriesPendingStopUntilSuccess(t *testing.T) {
+	facade, stops := stopCountingFacade(t, 1)
+	st := newStore()
+	st.put("ci-pending", entry{switchingID: "sw-pending", hEntry: "5", hID: "6", stopFailed: true})
+	kam := &fakeKam{}
+	r := newReaper(facade, nil, st)
+	r.kam = kam
+
+	_ = r.tick(context.Background())
+	if got := stops.Load(); got != 1 {
+		t.Fatalf("want one stop retry, got %d", got)
+	}
+	if _, ok := st.get("ci-pending"); !ok {
+		t.Fatal("pending entry dropped after failed retry")
+	}
+
+	_ = r.tick(context.Background())
+	if got := stops.Load(); got != 2 {
+		t.Fatalf("want two stop retries, got %d", got)
+	}
+	if _, ok := st.get("ci-pending"); ok {
+		t.Fatal("pending entry not removed after successful retry")
+	}
+	if len(kam.ended) != 0 {
+		t.Fatalf("pending-stop dialog must not be ended: %+v", kam.ended)
+	}
+}
+
+func TestReaperRetriesPendingStopWhenLiveFails(t *testing.T) {
+	facade, stops := stopCountingFacade(t, 0)
+	st := newStore()
+	st.put("ci-pending", entry{switchingID: "sw-pending", stopFailed: true})
+	r := newReaper(facade, nil, st)
+	r.live = func(context.Context) (map[string]bool, error) { return nil, errors.New("facade down") }
+	r.kam = &fakeKam{}
+
+	_ = r.tick(context.Background())
+	if got := stops.Load(); got != 1 {
+		t.Fatalf("want pending stop retried despite live failure, got %d", got)
+	}
+	if _, ok := st.get("ci-pending"); ok {
+		t.Fatal("pending entry not removed after successful retry")
+	}
 }
 
 func TestReaperDoesNotEndCallStoredDuringLiveFetch(t *testing.T) {

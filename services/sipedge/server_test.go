@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -41,11 +42,14 @@ func TestSipCode(t *testing.T) {
 }
 
 type fakeFacade struct {
-	started  startReq
-	stopped  []string
-	startRes startResp
-	startErr error
-	starts   int
+	started           startReq
+	stopped           []string
+	startRes          startResp
+	startErr          error
+	starts            int
+	stopErr           error
+	stopCalls         int
+	stopAlreadyAbsent bool
 }
 
 func (f *fakeFacade) start(ctx context.Context, req startReq) (startResp, error) {
@@ -54,8 +58,12 @@ func (f *fakeFacade) start(ctx context.Context, req startReq) (startResp, error)
 	return f.startRes, f.startErr
 }
 func (f *fakeFacade) stop(ctx context.Context, id string) (bool, error) {
+	f.stopCalls++
 	f.stopped = append(f.stopped, id)
-	return true, nil
+	if f.stopErr != nil {
+		return false, f.stopErr
+	}
+	return !f.stopAlreadyAbsent, nil
 }
 
 func newTestSipedge(t *testing.T, facade facade) (*httptest.Server, *store) {
@@ -190,6 +198,99 @@ func TestByeStopsCall(t *testing.T) {
 	}
 	if _, ok := st.get("ci-4"); ok {
 		t.Fatal("call id still tracked after bye")
+	}
+}
+
+func TestInviteAfterByeDoesNotReplayStaleAllow(t *testing.T) {
+	f := &fakeFacade{startRes: startResp{
+		Allowed: true, CallID: "sw-stale", TargetURI: "sip:gw:5060", MaxSeconds: 300,
+	}}
+	hs, _ := newTestSipedge(t, f)
+	invite := "ci-stale|172.28.0.1|27820000000|27821110000|27821110000|1|2"
+
+	first, err := http.Post(hs.URL+"/invite", "text/plain", strings.NewReader(invite))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.StatusCode != http.StatusOK {
+		t.Fatalf("first invite: want 200, got %d", first.StatusCode)
+	}
+	first.Body.Close()
+
+	bye, err := http.Post(hs.URL+"/bye", "text/plain", strings.NewReader("BYE ci-stale"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bye.Body.Close()
+
+	second, err := http.Post(hs.URL+"/invite", "text/plain", strings.NewReader(invite))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := io.ReadAll(second.Body)
+	second.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.StatusCode != http.StatusForbidden || string(body) != "canceled" {
+		t.Fatalf("want 403 canceled, got %d %q", second.StatusCode, body)
+	}
+}
+
+func TestByeStopFailureLeavesPendingEntry(t *testing.T) {
+	f := &fakeFacade{
+		startRes: startResp{Allowed: true, CallID: "sw-retry", TargetURI: "sip:gw:5060", MaxSeconds: 300},
+		stopErr:  errors.New("facade down"),
+	}
+	hs, st := newTestSipedge(t, f)
+
+	inv, err := http.Post(hs.URL+"/invite", "text/plain",
+		strings.NewReader("ci-retry|172.28.0.1|27820000000|27821110000|27821110000|5|6"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv.Body.Close()
+
+	resp, err := http.Post(hs.URL+"/bye", "text/plain", strings.NewReader("BYE ci-retry"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if f.stopCalls != 1 {
+		t.Fatalf("want one stop attempt, got %d", f.stopCalls)
+	}
+	e, ok := st.get("ci-retry")
+	if !ok {
+		t.Fatal("pending stop entry was dropped")
+	}
+	if e.switchingID != "sw-retry" || e.hEntry != "5" || e.hID != "6" {
+		t.Fatalf("pending entry lost coordinates: %+v", e)
+	}
+}
+
+func TestByeStopAlreadyAbsentRemovesEntry(t *testing.T) {
+	f := &fakeFacade{
+		startRes:          startResp{Allowed: true, CallID: "sw-absent", TargetURI: "sip:gw:5060", MaxSeconds: 300},
+		stopAlreadyAbsent: true,
+	}
+	hs, st := newTestSipedge(t, f)
+
+	inv, err := http.Post(hs.URL+"/invite", "text/plain",
+		strings.NewReader("ci-absent|172.28.0.1|27820000000|27821110000|27821110000|1|2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv.Body.Close()
+
+	resp, err := http.Post(hs.URL+"/bye", "text/plain", strings.NewReader("BYE ci-absent"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	if _, ok := st.get("ci-absent"); ok {
+		t.Fatal("entry kept when switching reported call already absent")
 	}
 }
 
