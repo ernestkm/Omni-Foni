@@ -99,23 +99,37 @@ func (f *facadeClient) do(ctx context.Context, method, path string, in, out any)
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
+// kamRPC talks to Kamailio's jsonrpcs HTTP transport.
 type kamRPC struct {
 	base string
 	http *http.Client
 }
 
 func (k *kamRPC) endDialog(ctx context.Context, hEntry, hID string) error {
+	body := `{"jsonrpc":"2.0","method":"dlg.end_dlg","params":[` + hEntry + `,` + hID + `],"id":1}`
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, k.base, strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := k.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("kamailio rpc status %d", resp.StatusCode)
+	}
+	var out struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return err
+	}
+	if out.Error != nil {
+		return fmt.Errorf("kamailio rpc: %s", out.Error.Message)
+	}
 	return nil
 }
-
-type reaper struct {
-	facade *facadeClient
-	kam    *kamRPC
-	store  *store
-}
-
-func newReaper(f *facadeClient, kam *kamRPC, st *store) *reaper {
-	return &reaper{facade: f, kam: kam, store: st}
-}
-
-func (r *reaper) run(interval time.Duration) {}
