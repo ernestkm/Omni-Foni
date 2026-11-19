@@ -294,9 +294,12 @@ func (*PutLcrRouteResponse) Descriptor() ([]byte, []int) {
 }
 
 type ResolveLcrResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TrunkId       string                 `protobuf:"bytes,1,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"` // empty means no enabled candidate matched
-	CostPerSec    int64                  `protobuf:"varint,2,opt,name=cost_per_sec,json=costPerSec,proto3" json:"cost_per_sec,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	TrunkId    string                 `protobuf:"bytes,1,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"` // empty means no enabled candidate matched
+	CostPerSec int64                  `protobuf:"varint,2,opt,name=cost_per_sec,json=costPerSec,proto3" json:"cost_per_sec,omitempty"`
+	// SIP relay target of the selected trunk; empty means the trunk cannot be
+	// relayed to and is excluded from LCR selection.
+	TargetUri     string `protobuf:"bytes,3,opt,name=target_uri,json=targetUri,proto3" json:"target_uri,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -345,10 +348,19 @@ func (x *ResolveLcrResponse) GetCostPerSec() int64 {
 	return 0
 }
 
+func (x *ResolveLcrResponse) GetTargetUri() string {
+	if x != nil {
+		return x.TargetUri
+	}
+	return ""
+}
+
 type PutTrunkRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TrunkId       string                 `protobuf:"bytes,1,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`
-	Enabled       bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	TrunkId string                 `protobuf:"bytes,1,opt,name=trunk_id,json=trunkId,proto3" json:"trunk_id,omitempty"`
+	Enabled bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// SIP URI the edge relays to for this trunk, e.g. "sip:gw.example:5060".
+	TargetUri     string `protobuf:"bytes,3,opt,name=target_uri,json=targetUri,proto3" json:"target_uri,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -395,6 +407,13 @@ func (x *PutTrunkRequest) GetEnabled() bool {
 		return x.Enabled
 	}
 	return false
+}
+
+func (x *PutTrunkRequest) GetTargetUri() string {
+	if x != nil {
+		return x.TargetUri
+	}
+	return ""
 }
 
 type PutTrunkResponse struct {
@@ -452,14 +471,18 @@ const file_routing_v1_routing_proto_rawDesc = "" +
 	"\btrunk_id\x18\x02 \x01(\tR\atrunkId\x12 \n" +
 	"\fcost_per_sec\x18\x03 \x01(\x03R\n" +
 	"costPerSec\"\x15\n" +
-	"\x13PutLcrRouteResponse\"Q\n" +
+	"\x13PutLcrRouteResponse\"p\n" +
 	"\x12ResolveLcrResponse\x12\x19\n" +
 	"\btrunk_id\x18\x01 \x01(\tR\atrunkId\x12 \n" +
 	"\fcost_per_sec\x18\x02 \x01(\x03R\n" +
-	"costPerSec\"F\n" +
+	"costPerSec\x12\x1d\n" +
+	"\n" +
+	"target_uri\x18\x03 \x01(\tR\ttargetUri\"e\n" +
 	"\x0fPutTrunkRequest\x12\x19\n" +
 	"\btrunk_id\x18\x01 \x01(\tR\atrunkId\x12\x18\n" +
-	"\aenabled\x18\x02 \x01(\bR\aenabled\"\x12\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12\x1d\n" +
+	"\n" +
+	"target_uri\x18\x03 \x01(\tR\ttargetUri\"\x12\n" +
 	"\x10PutTrunkResponse2\xf2\x02\n" +
 	"\aRouting\x12B\n" +
 	"\aResolve\x12\x1a.routing.v1.ResolveRequest\x1a\x1b.routing.v1.ResolveResponse\x12B\n" +

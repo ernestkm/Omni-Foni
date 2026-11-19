@@ -32,6 +32,9 @@ message StartCallResponse {
   string call_id = 3;
   string session_id = 4;
   int64 max_seconds = 5;
+  // SIP relay target of the resolved trunk; empty when not allowed or when
+  // routing is not wired.
+  string target_uri = 6;
 }
 
 message StopCallRequest {

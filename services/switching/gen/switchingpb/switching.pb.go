@@ -143,12 +143,15 @@ func (x *StartCallRequest) GetSourceIp() string {
 }
 
 type StartCallResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Allowed       bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
-	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // "" ok, else the Charging deny reason or ocs_unavailable
-	CallId        string                 `protobuf:"bytes,3,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	MaxSeconds    int64                  `protobuf:"varint,5,opt,name=max_seconds,json=maxSeconds,proto3" json:"max_seconds,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Allowed    bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	Reason     string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // "" ok, else the Charging deny reason or ocs_unavailable
+	CallId     string                 `protobuf:"bytes,3,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	SessionId  string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	MaxSeconds int64                  `protobuf:"varint,5,opt,name=max_seconds,json=maxSeconds,proto3" json:"max_seconds,omitempty"`
+	// SIP relay target of the resolved trunk; empty when not allowed or when
+	// routing is not wired.
+	TargetUri     string `protobuf:"bytes,6,opt,name=target_uri,json=targetUri,proto3" json:"target_uri,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -216,6 +219,13 @@ func (x *StartCallResponse) GetMaxSeconds() int64 {
 		return x.MaxSeconds
 	}
 	return 0
+}
+
+func (x *StartCallResponse) GetTargetUri() string {
+	if x != nil {
+		return x.TargetUri
+	}
+	return ""
 }
 
 type StopCallRequest struct {
@@ -632,7 +642,7 @@ const file_switching_v1_switching_proto_rawDesc = "" +
 	"account_id\x18\x01 \x01(\tR\taccountId\x12 \n" +
 	"\vdestination\x18\x02 \x01(\tR\vdestination\x12\x10\n" +
 	"\x03cli\x18\x03 \x01(\tR\x03cli\x12\x1b\n" +
-	"\tsource_ip\x18\x04 \x01(\tR\bsourceIp\"\x9e\x01\n" +
+	"\tsource_ip\x18\x04 \x01(\tR\bsourceIp\"\xbd\x01\n" +
 	"\x11StartCallResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x17\n" +
@@ -640,7 +650,9 @@ const file_switching_v1_switching_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1f\n" +
 	"\vmax_seconds\x18\x05 \x01(\x03R\n" +
-	"maxSeconds\"*\n" +
+	"maxSeconds\x12\x1d\n" +
+	"\n" +
+	"target_uri\x18\x06 \x01(\tR\ttargetUri\"*\n" +
 	"\x0fStopCallRequest\x12\x17\n" +
 	"\acall_id\x18\x01 \x01(\tR\x06callId\",\n" +
 	"\x10StopCallResponse\x12\x18\n" +

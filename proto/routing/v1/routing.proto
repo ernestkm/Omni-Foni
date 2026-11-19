@@ -46,11 +46,16 @@ message PutLcrRouteResponse {}
 message ResolveLcrResponse {
   string trunk_id = 1;  // empty means no enabled candidate matched
   int64 cost_per_sec = 2;
+  // SIP relay target of the selected trunk; empty means the trunk cannot be
+  // relayed to and is excluded from LCR selection.
+  string target_uri = 3;
 }
 
 message PutTrunkRequest {
   string trunk_id = 1;
   bool enabled = 2;
+  // SIP URI the edge relays to for this trunk, e.g. "sip:gw.example:5060".
+  string target_uri = 3;
 }
 
 message PutTrunkResponse {}
