@@ -161,6 +161,10 @@ func (s *Scheduler) runOne(ctx context.Context, sch Schedule, slot string, from,
 			PeriodFrom: a.PeriodFrom.UTC().Format(time.RFC3339),
 			PeriodTo:   a.PeriodTo.UTC().Format(time.RFC3339),
 			RowCount:   a.RowCount, CreatedAtMs: a.CreatedAt.UnixMilli(),
+			RecipientEmail: sch.RecipientEmail,
+		}
+		if s.signer != nil {
+			ev.ArtifactUrl, ev.ExpiresAtMs = s.signer.Sign(a.ScheduleID, a.ArtifactID, time.Now())
 		}
 		if err := s.pub.PublishReportReady(ctx, ev); err != nil {
 			slog.ErrorContext(ctx, "report.ready publish", "schedule", sch.ScheduleID, "err", err)

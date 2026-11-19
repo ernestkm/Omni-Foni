@@ -150,3 +150,40 @@ func TestRunScheduleNowUsesManualSlot(t *testing.T) {
 		t.Fatal("empty csv body")
 	}
 }
+
+func TestRunOnePublishesRecipientAndSignedURL(t *testing.T) {
+	schedReset(t)
+	reset(t)
+	ctx := context.Background()
+	sch, err := schedDB.CreateSchedule(ctx, Schedule{
+		TenantID: "t1", AccountIDs: []string{"a1"}, ReportKind: "cdrs",
+		WindowKind: "last_day", GroupBy: "none", PrefixLen: 3,
+		Frequency: "daily", AtHour: 0, AtMinute: 0, Enabled: true,
+		CreatedBy: "tester", RecipientEmail: "ops@example.test",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seed(t, testRow("r1", "a1", "27820001", "trunk-1", "normal", time.Now().UTC().Add(-time.Minute), 60, 10))
+	pub := &fakePublisher{}
+	signer := NewArtifactSigner("test-secret", "http://reports.test", time.Hour)
+	s := NewScheduler(schedDB, &reportsServer{store: store}, pub, signer)
+	a, err := s.RunScheduleNow(ctx, sch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pub.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(pub.events))
+	}
+	ev := pub.events[0]
+	if ev.GetRecipientEmail() != "ops@example.test" {
+		t.Fatalf("recipient = %q", ev.GetRecipientEmail())
+	}
+	if ev.GetExpiresAtMs() == 0 {
+		t.Fatal("missing expiry")
+	}
+	sid, aid, ok := signer.ValidDownloadURL(ev.GetArtifactUrl(), time.Now())
+	if !ok || sid != sch.ScheduleID || aid != a.ArtifactID {
+		t.Fatalf("artifact url = %q", ev.GetArtifactUrl())
+	}
+}
