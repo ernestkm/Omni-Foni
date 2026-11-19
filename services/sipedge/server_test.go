@@ -26,7 +26,7 @@ func TestSipCode(t *testing.T) {
 		"fraud_destination":   http.StatusForbidden,
 		"no_route":            http.StatusForbidden,
 		"ip_blocked":          http.StatusForbidden,
-		"whatever":            http.StatusForbidden,
+		"whatever":            http.StatusServiceUnavailable,
 	}
 	for reason, want := range cases {
 		if got := sipCode(reason); got != want {

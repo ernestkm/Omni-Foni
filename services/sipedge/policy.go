@@ -26,14 +26,16 @@ func parseAccounts(s string) map[string]string {
 }
 
 // sipCode maps a switching deny reason to an HTTP status the SIP edge turns
-// into a SIP reply: policy denials are 403, control-plane outages are 503.
+// into a SIP reply: known policy denials are 403; outages and unrecognized
+// reasons are 503 (fail-closed, per the design spec).
 func sipCode(reason string) int {
 	switch reason {
-	case "ocs_unavailable", "routing_unavailable", "sbc_unavailable",
-		"fraud_unavailable", "no_rate", "internal_error":
-		return http.StatusServiceUnavailable
-	default:
+	case "no_route", "barring_destination", "barring_cli", "fraud_destination",
+		"fraud_cli", "fraud_velocity_account", "fraud_velocity_prefix",
+		"trunk_limit_exceeded", "ip_blocked":
 		return http.StatusForbidden
+	default:
+		return http.StatusServiceUnavailable
 	}
 }
 
