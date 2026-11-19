@@ -295,6 +295,9 @@ services:
       REPORTS_SWITCHING_ADDR: switching:50052
       REPORTS_SCHED_DSN: postgres://postgres:dev-only@postgres:5432/reports_sched
       REPORTS_SCHED_TOPIC: report.ready
+      REPORTS_ARTIFACT_SIGNING_SECRET: dev-only
+      REPORTS_SIGNED_URL_TTL: "86400000"
+      REPORTS_PUBLIC_BASE_URL: http://localhost:50062
       REPORTS_ADDR: ":50061"
       REPORTS_HTTP_ADDR: ":50062"
       REPORTS_REFLECTION: "1"
