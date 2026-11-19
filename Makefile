@@ -63,6 +63,9 @@ protoc:
 		proto/reports/v1/reports.proto
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/reports --go_opt=module=omnifoni/reports \
 		proto/scheduling/v1/scheduling.proto
+	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/notifications --go_opt=module=omnifoni/notifications \
+		--go_opt=Mscheduling/v1/scheduling.proto=omnifoni/notifications/gen/schedulingpb \
+		proto/scheduling/v1/scheduling.proto
 	PATH=/root/go/bin:$(PATH) protoc -I proto --go_out=services/fraud --go_opt=module=omnifoni/fraud \
 		--go-grpc_out=services/fraud --go-grpc_opt=module=omnifoni/fraud \
 		proto/fraud/v1/fraud.proto
