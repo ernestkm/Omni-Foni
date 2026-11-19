@@ -114,20 +114,21 @@ func (s *RoutingServer) ResolveLcr(ctx context.Context, req *routingpb.ResolveRe
 	// 1000-route dataset a single index scan.
 	var trunk string
 	var cost int64
+	var target string
 	err = s.pool.QueryRow(ctx,
-		`SELECT r.trunk_id, r.cost_per_sec
+		`SELECT r.trunk_id, r.cost_per_sec, t.target_uri
 		 FROM lcr_routes r JOIN trunks t USING (trunk_id)
-		 WHERE r.prefix <= $1 AND $1 LIKE r.prefix || '%' AND t.enabled
+		 WHERE r.prefix <= $1 AND $1 LIKE r.prefix || '%' AND t.enabled AND t.target_uri <> ''
 		 ORDER BY r.cost_per_sec ASC, length(r.prefix) DESC, r.trunk_id ASC
 		 LIMIT 1`,
-		req.Number).Scan(&trunk, &cost)
+		req.Number).Scan(&trunk, &cost, &target)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return &routingpb.ResolveLcrResponse{}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &routingpb.ResolveLcrResponse{TrunkId: trunk, CostPerSec: cost}, nil
+	return &routingpb.ResolveLcrResponse{TrunkId: trunk, CostPerSec: cost, TargetUri: target}, nil
 }
 
 // PutTrunk registers a trunk's enabled state (LCR validity).
@@ -136,9 +137,9 @@ func (s *RoutingServer) PutTrunk(ctx context.Context, req *routingpb.PutTrunkReq
 		return nil, status.Error(codes.InvalidArgument, "trunk_id required")
 	}
 	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO trunks (trunk_id, enabled) VALUES ($1, $2)
-		 ON CONFLICT (trunk_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
-		req.TrunkId, req.Enabled); err != nil {
+		`INSERT INTO trunks (trunk_id, enabled, target_uri) VALUES ($1, $2, $3)
+		 ON CONFLICT (trunk_id) DO UPDATE SET enabled = $2, target_uri = $3, updated_at = now()`,
+		req.TrunkId, req.Enabled, req.TargetUri); err != nil {
 		return nil, err
 	}
 	return &routingpb.PutTrunkResponse{}, nil

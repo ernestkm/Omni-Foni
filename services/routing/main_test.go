@@ -125,9 +125,9 @@ func TestLcrCheapestValidTrunk(t *testing.T) {
 	c := startServer(t)
 	ctx := context.Background()
 	for _, tr := range []*routingpb.PutTrunkRequest{
-		{TrunkId: "cheap", Enabled: true},
-		{TrunkId: "cheapest", Enabled: false}, // disabled, must be skipped
-		{TrunkId: "dear", Enabled: true},
+		{TrunkId: "cheap", Enabled: true, TargetUri: "sip:cheap"},
+		{TrunkId: "cheapest", Enabled: false, TargetUri: "sip:cheapest"}, // disabled, must be skipped
+		{TrunkId: "dear", Enabled: true, TargetUri: "sip:dear"},
 	} {
 		if _, err := c.PutTrunk(ctx, tr); err != nil {
 			t.Fatal(err)
@@ -169,7 +169,7 @@ func TestLcrThousandRoutes(t *testing.T) {
 		prefix := fmt.Sprintf("0%04d", i)          // 0000..0999
 		trunk := fmt.Sprintf("trunk-%03d", i%50)   // 50 trunks
 		cost := int64(100 - i%97)                  // deterministic varied costs
-		for _, r := range []*routingpb.PutTrunkRequest{{TrunkId: trunk, Enabled: true}} {
+		for _, r := range []*routingpb.PutTrunkRequest{{TrunkId: trunk, Enabled: true, TargetUri: "sip:" + trunk}} {
 			if _, err := c.PutTrunk(ctx, r); err != nil && i < 50 {
 				t.Fatal(err)
 			}
@@ -194,5 +194,35 @@ func TestLcrThousandRoutes(t *testing.T) {
 	}
 	if res.TrunkId != "" {
 		t.Fatalf("unexpected trunk %q", res.TrunkId)
+	}
+}
+
+func TestResolveLcrSkipsEmptyTargets(t *testing.T) {
+	c := startServer(t)
+	ctx := context.Background()
+
+	// no_target has no target_uri: must not be selected.
+	if _, err := c.PutTrunk(ctx, &routingpb.PutTrunkRequest{TrunkId: "no_target", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutTrunk(ctx, &routingpb.PutTrunkRequest{TrunkId: "with_target", Enabled: true, TargetUri: "sip:gw:5060"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutLcrRoute(ctx, &routingpb.PutLcrRouteRequest{Prefix: "2782", TrunkId: "no_target", CostPerSec: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutLcrRoute(ctx, &routingpb.PutLcrRouteRequest{Prefix: "2782", TrunkId: "with_target", CostPerSec: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := c.ResolveLcr(ctx, &routingpb.ResolveRequest{Number: "27821110000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GetTrunkId() != "with_target" {
+		t.Fatalf("want with_target, got %q", res.GetTrunkId())
+	}
+	if res.GetTargetUri() != "sip:gw:5060" {
+		t.Fatalf("want target sip:gw:5060, got %q", res.GetTargetUri())
 	}
 }

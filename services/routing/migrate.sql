@@ -20,3 +20,7 @@ CREATE TABLE IF NOT EXISTS trunks (
     enabled    BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- SIP relay target for a trunk. Empty means the trunk cannot be relayed to
+-- and is excluded from LCR selection.
+ALTER TABLE trunks ADD COLUMN IF NOT EXISTS target_uri TEXT NOT NULL DEFAULT '';
