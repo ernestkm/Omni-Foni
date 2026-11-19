@@ -28,6 +28,9 @@ func reapInterval(raw string) (time.Duration, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
+	if d <= 0 {
+		return 0, false, nil
+	}
 	return d, true, nil
 }
 

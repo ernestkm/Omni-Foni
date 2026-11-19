@@ -15,6 +15,8 @@ func TestReapInterval(t *testing.T) {
 	}{
 		{name: "unset", raw: "", want: time.Second, wantOn: true},
 		{name: "explicit disable", raw: "0", want: 0, wantOn: false},
+		{name: "zero duration", raw: "0s", want: 0, wantOn: false},
+		{name: "negative duration", raw: "-1s", want: 0, wantOn: false},
 		{name: "explicit duration", raw: "2s", want: 2 * time.Second, wantOn: true},
 		{name: "invalid", raw: "nope", wantErr: true},
 	}

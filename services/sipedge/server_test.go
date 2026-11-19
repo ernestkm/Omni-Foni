@@ -269,6 +269,20 @@ func TestByeStopFailureLeavesPendingEntry(t *testing.T) {
 	}
 }
 
+func TestMarkStopFailedDoesNotMarkReplacedCall(t *testing.T) {
+	st := newStore()
+	st.put("ci", entry{switchingID: "old"})
+	st.put("ci", entry{switchingID: "new"})
+	st.markStopFailed("ci", "old")
+	e, ok := st.get("ci")
+	if !ok {
+		t.Fatal("replacement entry was removed")
+	}
+	if e.stopFailed {
+		t.Fatalf("replacement entry was marked: %+v", e)
+	}
+}
+
 func TestByeStopAlreadyAbsentRemovesEntry(t *testing.T) {
 	f := &fakeFacade{
 		startRes:          startResp{Allowed: true, CallID: "sw-absent", TargetURI: "sip:gw:5060", MaxSeconds: 300},

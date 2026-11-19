@@ -51,10 +51,10 @@ func (s *store) take(id string) (entry, bool) {
 	return e, ok
 }
 
-func (s *store) markStopFailed(id string) {
+func (s *store) markStopFailed(id, switchingID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if e, ok := s.m[id]; ok {
+	if e, ok := s.m[id]; ok && e.switchingID == switchingID {
 		e.stopFailed = true
 		s.m[id] = e
 	}
@@ -337,7 +337,7 @@ func (s *sipedgeServer) bye(w http.ResponseWriter, r *http.Request) {
 		span.SetAttributes(attribute.String("call_id", e.switchingID))
 		if _, err := s.facade.stop(ctx, e.switchingID); err != nil {
 			span.SetAttributes(attribute.String("stop_error", err.Error()))
-			s.store.markStopFailed(id)
+			s.store.markStopFailed(id, e.switchingID)
 		} else {
 			s.store.take(id)
 		}

@@ -59,6 +59,13 @@ TDD evidence:
 
 The first `make up` after the compose change recreated Kamailio, which exited 255. Logs showed `bad PVE format: "^[a-z0-9_]+$"` and `error -1 while trying to fix configuration` at `ops/kamailio/kamailio.cfg:109`. Commit `ccea11b` had added the trailing `$` anchor; Kamailio parses `$` as a pseudo-variable marker. The prior commit used the unanchored regex. A throwaway container check with the anchor removed printed `config file ok`, confirming the hypothesis. Applied that one-line revert in `ops/kamailio/kamailio.cfg`; deny reasons and HTTP status mapping are unchanged.
 
+## Follow-up hardening after the fix wave
+
+Two additional defects were found while verifying the fix wave and closed with TDD before final review:
+
+- `TestMarkStopFailedDoesNotMarkReplacedCall` failed with a compile error because `markStopFailed` did not bind the pending-stop mark to a `switchingID`; a reused Call-ID could have marked a replacement call as pending stop. `markStopFailed` now requires a matching `switchingID`, and `/bye` passes the ID it read from the store. Full `go test -race -count=1 ./...` passed after the change.
+- `TestReapInterval` subcases `zero duration` and `negative duration` failed with `(0s, true)` and `(-1s, true)`, which would panic `time.NewTicker`. `reapInterval` now treats every nonpositive parsed duration as disabled. Full `go test -race -count=1 ./...`, `go vet ./...`, and `gofmt -l .` passed after the change.
+
 ## Verification
 
 | Command | Outcome |
