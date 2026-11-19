@@ -36,7 +36,7 @@ func (i *Ingester) Handle(ctx context.Context, rec *kgo.Record) error {
 	}
 	if n.Status == "failed" {
 		slog.WarnContext(ctx, "report.ready terminal validation failure",
-			"artifact_id", ev.GetArtifactId(), "recipient", ev.GetRecipientEmail(), "reason", n.LastError)
+			"artifact_id", ev.GetArtifactId(), "email", ev.GetRecipientEmail(), "reason", n.LastError)
 	}
 	return nil
 }
