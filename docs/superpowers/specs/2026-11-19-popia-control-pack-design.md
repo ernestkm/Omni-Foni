@@ -37,10 +37,11 @@ Non-goals (YAGNI):
 - External penetration testing or vulnerability remediation.
 - Changes to billing, payment, identity, report, or notification behaviour.
 
-Feature claims come only from `docs/master-plan.md` sections 1.1, 5, 6, and 7.
-No ASTPP source, schema, or licensed asset was consulted. The seven-year and
-one-year retention values below are conservative engineering defaults, not
-legal advice.
+Feature claims come only from the four ASTPP marketing pages cited in
+`docs/master-plan.md` sections 0 and 8. Design controls are taken from sections
+5 and 6. No ASTPP source, schema, or licensed asset was consulted. The
+seven-year and one-year retention values below are conservative engineering
+defaults, not legal advice.
 
 ## 2. Approach
 
