@@ -128,9 +128,10 @@ func (a *Authenticator) getMe(ctx context.Context, token string) (meResponse, in
 }
 
 type httpServer struct {
-	api   API
-	auth  *Authenticator
-	sched *Scheduler
+	api    API
+	auth   *Authenticator
+	sched  *Scheduler
+	signer *ArtifactSigner
 }
 
 func bearer(r *http.Request) (string, bool) {

@@ -126,6 +126,7 @@ func main() {
 	}
 	var sched *Scheduler
 	var schedStore *SchedStore
+	var signer *ArtifactSigner
 	if schedDSN != "" {
 		schedStore, err = OpenSched(ctx, schedDSN)
 		if err != nil {
@@ -143,7 +144,21 @@ func main() {
 			os.Exit(1)
 		}
 		defer prod.Close()
-		sched = NewScheduler(schedStore, api, newKafkaReportPublisher(prod, env("REPORTS_SCHED_TOPIC", "report.ready")))
+		signedTTL := int64(86400000)
+		if v := os.Getenv("REPORTS_SIGNED_URL_TTL"); v != "" {
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || n < 1 {
+				slog.Error("bad REPORTS_SIGNED_URL_TTL", "value", v)
+				os.Exit(1)
+			}
+			signedTTL = n
+		}
+		signer = NewArtifactSigner(
+			env("REPORTS_ARTIFACT_SIGNING_SECRET", "dev-only"),
+			env("REPORTS_PUBLIC_BASE_URL", "http://localhost:50062"),
+			time.Duration(signedTTL)*time.Millisecond,
+		)
+		sched = NewScheduler(schedStore, api, newKafkaReportPublisher(prod, env("REPORTS_SCHED_TOPIC", "report.ready")), signer)
 		go func() {
 			t := time.NewTicker(time.Minute)
 			defer t.Stop()
@@ -190,7 +205,7 @@ func main() {
 	slog.Info("reports gRPC up", "addr", addr, "brokers", brokers, "topic", topic, "group", group)
 
 	mux := http.NewServeMux()
-	h := &httpServer{api: api, auth: NewAuthenticator(identity), sched: sched}
+	h := &httpServer{api: api, auth: NewAuthenticator(identity), sched: sched, signer: signer}
 	mux.HandleFunc("GET /reports/cdrs", h.ListCdrs)
 	mux.HandleFunc("GET /reports/summary", h.Summarize)
 	mux.HandleFunc("GET /reports/payments", h.Payments)

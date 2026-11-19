@@ -360,25 +360,46 @@ func (h *httpServer) DownloadArtifact(w http.ResponseWriter, r *http.Request) {
 	if !h.requireSched(w) {
 		return
 	}
-	token, ok := bearer(r)
-	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	tenant, _, code, err := h.auth.Scope(r.Context(), token, r.URL.Query().Get("tenant_id"))
-	if err != nil {
-		writeErr(w, code, err.Error())
-		return
-	}
-	sch, ok := h.getOwnedSchedule(w, r, tenant)
-	if !ok {
-		return
-	}
 	aid := r.PathValue("aid")
 	if _, err := uuid.Parse(aid); err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+
+	var sch Schedule
+	if token, ok := bearer(r); ok {
+		tenant, _, code, err := h.auth.Scope(r.Context(), token, r.URL.Query().Get("tenant_id"))
+		if err != nil {
+			writeErr(w, code, err.Error())
+			return
+		}
+		var owned bool
+		sch, owned = h.getOwnedSchedule(w, r, tenant)
+		if !owned {
+			return
+		}
+	} else {
+		if h.signer == nil {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		sid, signedAid, ok := h.signer.ValidDownloadURL(r.URL.String(), time.Now())
+		if !ok || signedAid != aid || sid != r.PathValue("id") {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		var err error
+		sch, err = h.sched.store.GetSchedule(r.Context(), sid)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeErr(w, http.StatusNotFound, "not found")
+				return
+			}
+			writeErr(w, http.StatusServiceUnavailable, "schedule_unavailable")
+			return
+		}
+	}
+
 	a, body, err := h.sched.store.GetArtifact(r.Context(), sch.ScheduleID, aid)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

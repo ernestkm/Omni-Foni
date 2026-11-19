@@ -14,11 +14,17 @@ import (
 )
 
 func schedFacade(t *testing.T) *httptest.Server {
+	srv, _ := schedFacadeWithSigner(t)
+	return srv
+}
+
+func schedFacadeWithSigner(t *testing.T) (*httptest.Server, *ArtifactSigner) {
 	t.Helper()
 	api := &reportsServer{store: store}
 	pub := &fakePublisher{}
-	sched := NewScheduler(schedDB, api, pub)
-	h := &httpServer{api: api, auth: NewAuthenticator(fakeIdentity(t).URL), sched: sched}
+	signer := NewArtifactSigner("test-secret", "http://reports.test", time.Hour)
+	sched := NewScheduler(schedDB, api, pub, signer)
+	h := &httpServer{api: api, auth: NewAuthenticator(fakeIdentity(t).URL), sched: sched, signer: signer}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /scheduled-reports", h.CreateSchedule)
 	mux.HandleFunc("GET /scheduled-reports", h.ListSchedules)
@@ -30,7 +36,7 @@ func schedFacade(t *testing.T) *httptest.Server {
 	mux.HandleFunc("POST /scheduled-reports/{id}/run", h.RunSchedule)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, signer
 }
 
 func schedBody(kind string) string {
@@ -373,5 +379,64 @@ func TestSchedHTTPUnavailable(t *testing.T) {
 	defer srv.Close()
 	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports?tenant_id=t1", "reseller", ""); code != http.StatusServiceUnavailable {
 		t.Fatalf("unavailable = %d", code)
+	}
+}
+
+func TestSchedHTTPDownloadSignedLink(t *testing.T) {
+	schedReset(t)
+	reset(t)
+	srv, signer := schedFacadeWithSigner(t)
+	id := createSchedule(t, srv, "reseller", "", "cdrs")
+	code, run := doJSON(t, http.MethodPost, srv.URL+"/scheduled-reports/"+id+"/run", "reseller", "")
+	if code != http.StatusAccepted {
+		t.Fatalf("run = %d %v", code, run)
+	}
+	aid := run["artifact_id"].(string)
+	raw, _ := signer.Sign(id, aid, time.Now())
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+strings.TrimPrefix(raw, "http://reports.test"), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("signed download = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/csv; charset=utf-8" {
+		t.Fatalf("content-type = %q", ct)
+	}
+
+	expired, _ := signer.Sign(id, aid, time.Now().Add(-2*time.Hour))
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+strings.TrimPrefix(expired, "http://reports.test"), nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expired download = %d, want 403", resp.StatusCode)
+	}
+
+	tampered := strings.Replace(raw, "sig=", "sig=x", 1)
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+strings.TrimPrefix(tampered, "http://reports.test"), nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("tampered download = %d, want 403", resp.StatusCode)
+	}
+
+	other := strings.Replace(raw, "/artifacts/"+aid+"/", "/artifacts/not-a-uuid/", 1)
+	req, _ = http.NewRequest(http.MethodGet, srv.URL+strings.TrimPrefix(other, "http://reports.test"), nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("wrong artifact = %d, want 404 or 403", resp.StatusCode)
 	}
 }

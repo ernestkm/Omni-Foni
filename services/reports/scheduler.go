@@ -43,13 +43,14 @@ func (p *kafkaReportPublisher) PublishReportReady(ctx context.Context, ev *sched
 
 // Scheduler renders due schedules into CSV artifacts.
 type Scheduler struct {
-	store *SchedStore
-	api   API
-	pub   ReportPublisher
+	store  *SchedStore
+	api    API
+	pub    ReportPublisher
+	signer *ArtifactSigner
 }
 
-func NewScheduler(store *SchedStore, api API, pub ReportPublisher) *Scheduler {
-	return &Scheduler{store: store, api: api, pub: pub}
+func NewScheduler(store *SchedStore, api API, pub ReportPublisher, signer *ArtifactSigner) *Scheduler {
+	return &Scheduler{store: store, api: api, pub: pub, signer: signer}
 }
 
 // due reports whether the schedule fires at the given UTC wall-clock time.

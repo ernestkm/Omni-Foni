@@ -90,7 +90,8 @@ func TestRunDueSchedulesCreatesOneArtifact(t *testing.T) {
 	start := now.Add(-2 * time.Hour)
 	seed(t, testRow("r1", "a1", "27820001", "trunk-1", "normal", start, 60, 10))
 	pub := &fakePublisher{}
-	s := NewScheduler(schedDB, &reportsServer{store: store}, pub)
+	signer := NewArtifactSigner("test-secret", "http://reports.test", time.Hour)
+	s := NewScheduler(schedDB, &reportsServer{store: store}, pub, signer)
 	if err := s.RunDueSchedules(ctx, now); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,8 @@ func TestRunScheduleNowUsesManualSlot(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	seed(t, testRow("r1", "a1", "27820001", "trunk-1", "normal", now.Add(-time.Minute), 60, 10))
-	s := NewScheduler(schedDB, &reportsServer{store: store}, &fakePublisher{})
+	signer := NewArtifactSigner("test-secret", "http://reports.test", time.Hour)
+	s := NewScheduler(schedDB, &reportsServer{store: store}, &fakePublisher{}, signer)
 	a, err := s.RunScheduleNow(ctx, sch)
 	if err != nil {
 		t.Fatal(err)
