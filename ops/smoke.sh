@@ -12,14 +12,16 @@ done
 
 docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT 1 FROM pg_database WHERE datname='charging'" | grep -q 1 || fail "charging DB missing"
 
-dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','fraud','mediation','reports_sched')")
-[ "$dbs" = "10" ] || fail "expected 10 context databases, got $dbs"
+docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT 1 FROM pg_database WHERE datname='notifications'" | grep -q 1 || docker exec omni-fon-postgres-1 createdb -U postgres notifications
+
+dbs=$(docker exec omni-fon-postgres-1 psql -U postgres -At -c "SELECT count(*) FROM pg_database WHERE datistemplate=false AND datname IN ('identity','catalogue','charging','billing','payments','routing','sbc','fraud','mediation','reports_sched','notifications')")
+[ "$dbs" = "11" ] || fail "expected 11 context databases, got $dbs"
 
 docker exec omni-fon-valkey-1 valkey-cli ping | grep -q PONG || fail "valkey"
 curl -fsS http://localhost:8123/ping >/dev/null || fail "clickhouse"
 docker exec omni-fon-kafka-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1 || fail "kafka"
 
-for s in charging switching mediation billing payments identity routing sbc fraud reconciliation reports kamailio sipedge sipuas; do
+for s in charging switching mediation billing payments identity routing sbc fraud reconciliation reports notifications mailpit kamailio sipedge sipuas; do
   st=$(docker inspect --format '{{.State.Status}}' "omni-fon-$s-1" 2>/dev/null || echo missing)
   [ "$st" = "running" ] || fail "$s not running ($st)"
   echo "ok: $s running"
@@ -68,6 +70,8 @@ docker exec omni-fon-postgres-1 psql -U postgres -d charging -qAt -c "UPDATE acc
 (cd services/sipedge && SIP_SMOKE_CALL_ID="smoke-exhaust-$(date +%s%N)" SIP_SMOKE_DEST=27881110000 SIP_SMOKE_MODE=exhaust go run ./cmd/sipsmoke >/dev/null) || fail "sip exhaust probe"
 echo "ok: sip exhaust"
 
+curl -fsS -X DELETE http://localhost:8025/api/v1/messages >/dev/null || fail "mailpit reset"
+
 sched=$(curl -fsS -X POST -H 'Authorization: Bearer tok-smoke' -H 'Content-Type: application/json' \
   -d '{"report_kind":"cdrs","window_kind":"previous_month","frequency":"daily","at_hour":0,"at_minute":0}' \
   "http://localhost:50062/scheduled-reports?tenant_id=$tid")
@@ -85,10 +89,26 @@ hdr=$(head -n 1 /tmp/sched.csv)
 grep -qi '^content-disposition: attachment' /tmp/sched-hdr.txt || fail "scheduled report headers"
 echo "ok: scheduled report"
 
+mid=""
+for _ in $(seq 1 30); do
+  mid=$(curl -fsS http://localhost:8025/api/v1/messages | grep -o '"ID":"[^"]*"' | head -n1 | cut -d'"' -f4 || true)
+  [ -n "$mid" ] && break
+  sleep 1
+done
+[ -n "$mid" ] || fail "notification email missing"
+msg=$(curl -fsS "http://localhost:8025/api/v1/message/$mid")
+msg=$(printf '%s' "$msg" | sed 's/\\u0026/\&/g')
+link=$(printf '%s' "$msg" | grep -oE 'http://localhost:50062/scheduled-reports/[^"\\ ]+/download\?[^"\\ ]+' | head -n1 || true)
+[ -n "$link" ] || fail "notification link missing"
+curl -fsS "$link" -o /tmp/notified.csv || fail "notification link download"
+hdr=$(head -n 1 /tmp/notified.csv)
+[ "$hdr" = "call_id,account_id,destination,cli,started_at_ms,ended_at_ms,charged_seconds,end_reason,trunk_id,rate_per_sec,amount_minor,rate_missing" ] || fail "notification csv"
+echo "ok: notification email"
+
 # The probes call reconciliation, reports and fraud, so the trace backend must
 # have spans for all of them; otherwise tracing is broken.
 services=$(curl -fsS http://localhost:16686/api/services) || fail "jaeger api"
-for s in reconciliation billing payments reports fraud sipedge; do
+for s in reconciliation billing payments reports notifications fraud sipedge; do
   echo "$services" | grep -q "\"$s\"" || fail "no traces for $s"
   echo "ok: traces for $s"
 done

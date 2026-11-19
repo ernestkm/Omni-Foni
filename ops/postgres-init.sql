@@ -8,3 +8,4 @@ CREATE DATABASE sbc;
 CREATE DATABASE fraud;
 CREATE DATABASE mediation;
 CREATE DATABASE reports_sched;
+CREATE DATABASE notifications;

@@ -281,6 +281,39 @@ services:
       payments:
         condition: service_started
 
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  notifications:
+    build:
+      context: ./services
+      dockerfile: notifications/Dockerfile
+    environment:
+      NOTIFICATIONS_DSN: postgres://postgres:dev-only@postgres:5432/notifications
+      NOTIFICATIONS_KAFKA: kafka:9092
+      NOTIFICATIONS_TOPIC_REPORT_READY: report.ready
+      NOTIFICATIONS_GROUP: notifications
+      NOTIFICATIONS_SMTP_ADDR: mailpit:1025
+      NOTIFICATIONS_SMTP_FROM: omnifoni@example.test
+      NOTIFICATIONS_MAX_ATTEMPTS: "5"
+      NOTIFICATIONS_POLL_INTERVAL: 1s
+      NOTIFICATIONS_BATCH_SIZE: "32"
+      NOTIFICATIONS_ADDR: ":50064"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+      OBS_SAMPLE_RATIO: "1.0"
+    ports:
+      - "50064:50064"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
   reports:
     build:
       context: ./services
