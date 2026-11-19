@@ -281,7 +281,7 @@ func routingClientFor(t *testing.T) routingpb.RoutingClient {
 func seedLcr(t *testing.T, rc routingpb.RoutingClient, prefix, trunk string, cost int64) {
 	t.Helper()
 	ctx := context.Background()
-	if _, err := rc.PutTrunk(ctx, &routingpb.PutTrunkRequest{TrunkId: trunk, Enabled: true}); err != nil {
+	if _, err := rc.PutTrunk(ctx, &routingpb.PutTrunkRequest{TrunkId: trunk, Enabled: true, TargetUri: fmt.Sprintf("sip:%s:5060", trunk)}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rc.PutLcrRoute(ctx, &routingpb.PutLcrRouteRequest{Prefix: prefix, TrunkId: trunk, CostPerSec: cost}); err != nil {

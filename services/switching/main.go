@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"omnifoni/observability"
 	routingpb "omnifoni/routing/gen/routingpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
-	"omnifoni/observability"
 )
 
 func main() {

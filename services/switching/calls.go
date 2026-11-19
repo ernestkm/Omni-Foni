@@ -14,10 +14,10 @@ import (
 
 	chargingpb "omnifoni/charging/gen/chargingpb"
 	mediationpb "omnifoni/mediation/gen/mediationpb"
+	"omnifoni/observability"
 	routingpb "omnifoni/routing/gen/routingpb"
 	sbcpb "omnifoni/sbc/gen/sbcpb"
 	pb "omnifoni/switching/gen/switchingpb"
-	"omnifoni/observability"
 )
 
 // routingClient adapts the Routing gRPC client to RouteResolver. The call
