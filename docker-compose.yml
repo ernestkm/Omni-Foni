@@ -119,6 +119,7 @@ services:
       SWITCHING_SBC_ADDR: sbc:50058
       SWITCHING_KAFKA: kafka:9092
       SWITCHING_ADDR: ":50052"
+      SWITCHING_HTTP_ADDR: ":50070"
       SWITCHING_REFLECTION: "1"
       OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
       OBS_SAMPLE_RATIO: "1.0"
@@ -320,7 +321,53 @@ services:
       switching:
         condition: service_started
 
+  sipedge:
+    build:
+      context: ./services
+      dockerfile: sipedge/Dockerfile
+    environment:
+      SIPEDGE_SHIM_ADDR: ":50071"
+      SIPEDGE_SWITCHING_HTTP: "http://switching:50070"
+      SIPEDGE_KAMAILIO_RPC: "http://kamailio:5060/RPC"
+      SIPEDGE_TRUNK_ACCOUNTS: "172.28.0.1=acc-sip-smoke"
+      SIPEDGE_REAP_INTERVAL: "1s"
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
+    depends_on:
+      switching:
+        condition: service_started
+    networks: [default, sip]
+
+  kamailio:
+    image: ghcr.io/kamailio/kamailio:5.8.3-bookworm
+    volumes:
+      - ./ops/kamailio/kamailio.cfg:/etc/kamailio/kamailio.cfg:ro
+    ports:
+      - "5060:5060/udp"
+    depends_on:
+      - sipedge
+    networks: [sip]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"core.uptime\",\"id\":1}' --header='Content-Type: application/json' http://127.0.0.1:5060/RPC"]
+      interval: 10s
+      retries: 10
+
+  sipuas:
+    build:
+      context: ./services
+      dockerfile: sipedge/Dockerfile
+    command: ["/sipuas"]
+    environment:
+      SIPUAS_ADDR: ":5060"
+    networks: [sip]
+
 volumes:
   pgdata:
   valkeydata:
   chdata:
+
+networks:
+  sip:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
