@@ -331,6 +331,32 @@ func TestRoutingOutageFailClosed(t *testing.T) {
 	}
 }
 
+type fixedResolver struct{ trunk, target string }
+
+func (f fixedResolver) Resolve(_ context.Context, _ string) (string, string, error) {
+	return f.trunk, f.target, nil
+}
+
+func TestStartCallReturnsTrunkTarget(t *testing.T) {
+	seed(t, "acc-target", 100000, "2782", "0.010000")
+	client := startSwitchingAll(t, chargingAddr(), nil, fixedResolver{"trunk-a", "sip:gw:5060"}, nil)
+	sc := pb.NewSwitchingClient(client)
+
+	res, err := sc.StartCall(context.Background(), &pb.StartCallRequest{
+		AccountId: "acc-target", Destination: "27821110000", Cli: "27820000000",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.GetAllowed() {
+		t.Fatalf("call denied: %s", res.GetReason())
+	}
+	if res.GetTargetUri() != "sip:gw:5060" {
+		t.Fatalf("want target sip:gw:5060, got %q", res.GetTargetUri())
+	}
+	sc.StopCall(context.Background(), &pb.StopCallRequest{CallId: res.GetCallId()})
+}
+
 // fakeSbc is an in-process SbcChecker with a concurrent-call limit.
 type fakeSbc struct {
 	limit         int

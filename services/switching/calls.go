@@ -27,12 +27,12 @@ type routingClient struct {
 	rc routingpb.RoutingClient
 }
 
-func (r routingClient) Resolve(ctx context.Context, number string) (string, error) {
+func (r routingClient) Resolve(ctx context.Context, number string) (string, string, error) {
 	res, err := r.rc.ResolveLcr(ctx, &routingpb.ResolveRequest{Number: number})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return res.GetTrunkId(), nil
+	return res.GetTrunkId(), res.GetTargetUri(), nil
 }
 
 // Registry tracks live calls and their event streams.
@@ -49,9 +49,11 @@ type Registry struct {
 	sbc SbcChecker
 }
 
-// RouteResolver maps a dialed number to a trunk; empty means no rule matched.
+// RouteResolver maps a dialed number to a trunk and its SIP target. An empty
+// trunk means no rule matched; an empty target means the trunk cannot be
+// relayed to.
 type RouteResolver interface {
-	Resolve(ctx context.Context, number string) (string, error)
+	Resolve(ctx context.Context, number string) (trunkID, targetURI string, err error)
 }
 
 // SbcChecker is the SBC playbook surface the call path needs.
@@ -85,6 +87,7 @@ type call struct {
 
 	accountID, destination, cli string
 	trunkID                     string
+	targetURI                   string
 	start                       time.Time
 	maxSeconds                  int64 // OCS authorize cap, immutable
 	chargedSeconds              int64 // updated under mu on every tick
@@ -130,10 +133,10 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 			attribute.String("destination", observability.Mask(req.GetDestination()))))
 	defer span.End()
 	callID := uuid.New().String()
-	var trunk string
+	var trunk, target string
 	if r.routing != nil {
 		var err error
-		trunk, err = r.routing.Resolve(ctx, req.GetDestination())
+		trunk, target, err = r.routing.Resolve(ctx, req.GetDestination())
 		switch {
 		case err != nil:
 			slog.ErrorContext(ctx, "routing unreachable, fail-closed", "call", req.GetDestination(), "err", err)
@@ -183,6 +186,7 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 		destination: req.GetDestination(),
 		cli:         req.GetCli(),
 		trunkID:     trunk,
+		targetURI:   target,
 		start:       time.Now(),
 		maxSeconds:  cauth.GetMaxSeconds(),
 		traceCtx:    trace.ContextWithSpanContext(context.Background(), trace.SpanContextFromContext(ctx)),
@@ -203,7 +207,8 @@ func (r *Registry) StartCall(ctx context.Context, cc *grpc.ClientConn, req *pb.S
 	go r.runCall(cc, c)
 
 	return &pb.StartCallResponse{Allowed: true, CallId: c.id,
-		SessionId: cauth.GetSessionId(), MaxSeconds: cauth.GetMaxSeconds()}, nil
+		SessionId: cauth.GetSessionId(), MaxSeconds: cauth.GetMaxSeconds(),
+		TargetUri: target}, nil
 }
 
 // runCall charges every whole second until StopCall, denial, or OCS failure.
