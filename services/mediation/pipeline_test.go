@@ -57,23 +57,68 @@ func newPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// resetTopics deletes and recreates the test output topics so repeated runs
-// start from empty logs.
-func resetTopics(t *testing.T, cl *kgo.Client) {
+func TestPipelineTopicsAreIsolated(t *testing.T) {
+	normalized, rejected := pipelineTopics(t)
+	if normalized == "cdrs.normalized" || rejected == "cdrs.rejected" {
+		t.Fatalf("pipeline tests reused shared topics: normalized=%q rejected=%q", normalized, rejected)
+	}
+	if normalized == rejected {
+		t.Fatalf("pipeline tests reused one topic: %q", normalized)
+	}
+}
+
+type recordingTopicCreator struct {
+	created []string
+	topics  kadm.TopicDetails
+}
+
+func (r *recordingTopicCreator) CreateTopics(_ context.Context, _ int32, _ int16, _ map[string]*string, topics ...string) (kadm.CreateTopicResponses, error) {
+	r.created = append(r.created, topics...)
+	return kadm.CreateTopicResponses{}, nil
+}
+
+func (r *recordingTopicCreator) ListTopics(_ context.Context, _ ...string) (kadm.TopicDetails, error) {
+	return r.topics, nil
+}
+
+func TestEnsureTopicsUsesOnlyRequestedNames(t *testing.T) {
+	normalized, rejected := pipelineTopics(t)
+	admin := &recordingTopicCreator{topics: kadm.TopicDetails{
+		normalized: kadm.TopicDetail{},
+		rejected:   kadm.TopicDetail{},
+	}}
+	ensureTopics(t, admin, normalized, rejected)
+
+	created := map[string]bool{}
+	for _, topic := range admin.created {
+		if topic == "cdrs.normalized" || topic == "cdrs.rejected" {
+			t.Fatalf("shared topic was touched: %q", topic)
+		}
+		created[topic] = true
+	}
+	for _, topic := range []string{normalized, rejected} {
+		if !created[topic] {
+			t.Fatalf("topic %q was not created", topic)
+		}
+	}
+}
+
+func pipelineTopics(t *testing.T) (string, string) {
+	t.Helper()
+	id := uuid.New().String()
+	return "cdrs.normalized-test-" + id, "cdrs.rejected-test-" + id
+}
+
+type topicCreator interface {
+	CreateTopics(context.Context, int32, int16, map[string]*string, ...string) (kadm.CreateTopicResponses, error)
+	ListTopics(context.Context, ...string) (kadm.TopicDetails, error)
+}
+
+func ensureTopics(t *testing.T, admin topicCreator, topics ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	admin := kadm.NewClient(cl)
-	deleted, err := admin.DeleteTopics(ctx, "cdrs.normalized", "cdrs.rejected")
-	if err != nil && !errors.Is(err, kerr.UnknownTopicOrPartition) {
-		t.Fatal(err)
-	}
-	for _, d := range deleted.Sorted() {
-		if d.Err != nil && !errors.Is(d.Err, kerr.UnknownTopicOrPartition) {
-			t.Fatal(d.Err)
-		}
-	}
-	created, err := admin.CreateTopics(ctx, 1, 1, nil, "cdrs.normalized", "cdrs.rejected")
+	created, err := admin.CreateTopics(ctx, 1, 1, nil, topics...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,16 +128,29 @@ func resetTopics(t *testing.T, cl *kgo.Client) {
 		}
 	}
 	for ctx.Err() == nil {
-		details, err := admin.ListTopics(ctx, "cdrs.normalized", "cdrs.rejected")
+		details, err := admin.ListTopics(ctx, topics...)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(details) == 2 {
+		if len(details) == len(topics) {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("test topics not ready:", ctx.Err())
+}
+
+func createTestTopics(t *testing.T, cl *kgo.Client, topics ...string) {
+	t.Helper()
+	admin := kadm.NewClient(cl)
+	ensureTopics(t, admin, topics...)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, err := admin.DeleteTopics(ctx, topics...); err != nil {
+			t.Logf("delete test topics: %v", err)
+		}
+	})
 }
 
 // cdrRecord builds a raw record like Switching would publish.
@@ -137,8 +195,9 @@ func readRecords(t *testing.T, topic string, want int) []*kgo.Record {
 func TestHandlePipeline(t *testing.T) {
 	pool := newPool(t)
 	cl := newKafka(t)
-	resetTopics(t, cl)
-	p := NewProcessor(pool, cl, "cdrs.normalized", "cdrs.rejected")
+	normalizedTopic, rejectedTopic := pipelineTopics(t)
+	createTestTopics(t, cl, normalizedTopic, rejectedTopic)
+	p := NewProcessor(pool, cl, normalizedTopic, rejectedTopic)
 	ctx := context.Background()
 
 	valid := &pb.CallCdr{CallId: "c-1", AccountId: "a-1", Destination: "35551234567", EndReason: "normal", ChargedSeconds: 5, TrunkId: "trunk-a"}
@@ -156,7 +215,7 @@ func TestHandlePipeline(t *testing.T) {
 		}
 	}
 
-	norm := readRecords(t, "cdrs.normalized", 2)
+	norm := readRecords(t, normalizedTopic, 2)
 	if len(norm) != 2 {
 		t.Fatalf("normalized count %d, want 2", len(norm))
 	}
@@ -179,7 +238,7 @@ func TestHandlePipeline(t *testing.T) {
 		t.Fatalf("normalized order/keys wrong: %q, %q", norm[0].Key, norm[1].Key)
 	}
 
-	rej := readRecords(t, "cdrs.rejected", 2)
+	rej := readRecords(t, rejectedTopic, 2)
 	if len(rej) != 2 {
 		t.Fatalf("rejected count %d, want 2", len(rej))
 	}
@@ -211,8 +270,9 @@ func TestHandlePipeline(t *testing.T) {
 func TestHandleReplaySkips(t *testing.T) {
 	pool := newPool(t)
 	cl := newKafka(t)
-	resetTopics(t, cl)
-	p := NewProcessor(pool, cl, "cdrs.normalized", "cdrs.rejected")
+	normalizedTopic, rejectedTopic := pipelineTopics(t)
+	createTestTopics(t, cl, normalizedTopic, rejectedTopic)
+	p := NewProcessor(pool, cl, normalizedTopic, rejectedTopic)
 	ctx := context.Background()
 	c := &pb.CallCdr{CallId: "c-replay", AccountId: "a-1", EndReason: "normal"}
 	rec := cdrRecord(t, "cdrs.raw", c)
@@ -222,7 +282,7 @@ func TestHandleReplaySkips(t *testing.T) {
 	if err := p.Handle(ctx, rec); err != nil {
 		t.Fatal(err)
 	}
-	norm := readRecords(t, "cdrs.normalized", 1)
+	norm := readRecords(t, normalizedTopic, 1)
 	count := 0
 	for _, r := range norm {
 		if string(r.Key) == "c-replay" {

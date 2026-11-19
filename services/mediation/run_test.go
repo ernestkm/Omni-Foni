@@ -20,13 +20,14 @@ import (
 func TestRunLoop(t *testing.T) {
 	pool := newPool(t)
 	prod := newKafka(t)
-	resetTopics(t, prod)
 	raw := "cdrs.raw-loop-" + uuid.New().String()
 	norm := raw + "-normalized"
-	p := NewProcessor(pool, prod, norm, "cdrs.rejected")
+	rejected := raw + "-rejected"
+	createTestTopics(t, prod, norm, rejected)
+	p := NewProcessor(pool, prod, norm, rejected)
 
 	admin := kadm.NewClient(prod)
-	created, err := admin.CreateTopics(context.Background(), 1, 1, nil, raw, norm)
+	created, err := admin.CreateTopics(context.Background(), 1, 1, nil, raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,6 +36,11 @@ func TestRunLoop(t *testing.T) {
 			t.Fatal(c.Err)
 		}
 	}
+	t.Cleanup(func() {
+		if _, err := admin.DeleteTopics(context.Background(), raw); err != nil {
+			t.Logf("delete raw test topic: %v", err)
+		}
+	})
 
 	consumer, err := kgo.NewClient(
 		kgo.SeedBrokers(kafkaBrokers()...),
