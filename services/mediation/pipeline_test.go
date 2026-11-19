@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 	kgo "github.com/twmb/franz-go/pkg/kgo"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/proto"
 
 	pb "omnifoni/mediation/gen/mediationpb"
