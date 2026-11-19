@@ -13,9 +13,12 @@ CREATE TABLE IF NOT EXISTS schedules (
   day_of_month smallint CHECK (day_of_month BETWEEN 1 AND 31),
   enabled      boolean NOT NULL DEFAULT true,
   created_by   text NOT NULL,
+  recipient_email text NOT NULL DEFAULT '',
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS recipient_email text NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS report_artifacts (
   artifact_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

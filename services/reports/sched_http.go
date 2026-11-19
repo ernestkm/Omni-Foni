@@ -55,8 +55,9 @@ func scheduleJSON(s Schedule) map[string]any {
 		"prefix_len": s.PrefixLen, "frequency": s.Frequency, "at_hour": s.AtHour,
 		"at_minute": s.AtMinute, "weekday": s.Weekday, "day_of_month": s.DayOfMonth,
 		"enabled": s.Enabled, "created_by": s.CreatedBy,
-		"created_at": s.CreatedAt.UTC().Format(time.RFC3339),
-		"updated_at": s.UpdatedAt.UTC().Format(time.RFC3339),
+		"recipient_email": s.RecipientEmail,
+		"created_at":      s.CreatedAt.UTC().Format(time.RFC3339),
+		"updated_at":      s.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -172,13 +173,14 @@ func (h *httpServer) CreateSchedule(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	uid, code, err := h.auth.UserID(r.Context(), token)
+	me, code, err := h.auth.Me(r.Context(), token)
 	if err != nil {
 		writeErr(w, code, err.Error())
 		return
 	}
 	in.TenantID = tenant
-	in.CreatedBy = uid
+	in.CreatedBy = me.UserID
+	in.RecipientEmail = me.Email
 	created, err := h.sched.store.CreateSchedule(r.Context(), in)
 	if err != nil {
 		writeErr(w, http.StatusServiceUnavailable, "schedule_unavailable")

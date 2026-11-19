@@ -41,6 +41,7 @@ type meResponse struct {
 	UserID   string `json:"user_id"`
 	Role     string `json:"role"`
 	TenantID string `json:"tenant_id"`
+	Email    string `json:"email"`
 }
 
 type accountResponse struct {
@@ -104,6 +105,10 @@ func (a *Authenticator) UserID(ctx context.Context, token string) (string, int, 
 		return "", code, err
 	}
 	return me.UserID, http.StatusOK, nil
+}
+
+func (a *Authenticator) Me(ctx context.Context, token string) (meResponse, int, error) {
+	return a.getMe(ctx, token)
 }
 
 func (a *Authenticator) getMe(ctx context.Context, token string) (meResponse, int, error) {

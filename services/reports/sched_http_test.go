@@ -112,6 +112,9 @@ func TestSchedHTTPLifecycle(t *testing.T) {
 	if one["created_by"] != "u2" {
 		t.Fatalf("created_by = %v, want caller user id u2", one["created_by"])
 	}
+	if one["recipient_email"] != "r@x" {
+		t.Fatalf("recipient_email = %v, want identity email r@x", one["recipient_email"])
+	}
 	if code, _ := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/not-a-uuid", "reseller", ""); code != http.StatusNotFound {
 		t.Fatalf("malformed schedule id = %d, want 404", code)
 	}
@@ -135,6 +138,8 @@ func TestSchedHTTPLifecycle(t *testing.T) {
 		t.Fatalf("patch = %d %v", code, body)
 	} else if body["frequency"] != "weekly" || body["enabled"] != false {
 		t.Fatalf("patch body = %v", body)
+	} else if body["recipient_email"] != "r@x" {
+		t.Fatalf("patch changed recipient_email: %v", body["recipient_email"])
 	}
 
 	code, arts := doJSON(t, http.MethodGet, srv.URL+"/scheduled-reports/"+id+"/artifacts", "reseller", "")

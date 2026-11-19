@@ -23,20 +23,21 @@ type Schedule struct {
 	// time, so an empty slice is never an omitted (global) filter; it can only
 	// arise when the tenant owns no accounts. Renders with empty ids produce
 	// header-only CSV and never query the report APIs.
-	AccountIDs []string
-	ReportKind string
-	WindowKind string
-	GroupBy    string
-	PrefixLen  int
-	Frequency  string
-	AtHour     int
-	AtMinute   int
-	Weekday    *int
-	DayOfMonth *int
-	Enabled    bool
-	CreatedBy  string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	AccountIDs     []string
+	ReportKind     string
+	WindowKind     string
+	GroupBy        string
+	PrefixLen      int
+	Frequency      string
+	AtHour         int
+	AtMinute       int
+	Weekday        *int
+	DayOfMonth     *int
+	Enabled        bool
+	CreatedBy      string
+	RecipientEmail string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // Artifact is one rendered CSV body plus its slot identity.
@@ -78,24 +79,25 @@ func (s *SchedStore) Migrate(ctx context.Context) error {
 
 const scheduleColumns = `schedule_id, tenant_id, account_ids, report_kind, window_kind,
 	group_by, prefix_len, frequency, at_hour, at_minute, weekday, day_of_month,
-	enabled, created_by, created_at, updated_at`
+	enabled, created_by, recipient_email, created_at, updated_at`
 
 func scanSchedule(row pgx.Row) (Schedule, error) {
 	var s Schedule
 	err := row.Scan(&s.ScheduleID, &s.TenantID, &s.AccountIDs, &s.ReportKind, &s.WindowKind,
 		&s.GroupBy, &s.PrefixLen, &s.Frequency, &s.AtHour, &s.AtMinute, &s.Weekday, &s.DayOfMonth,
-		&s.Enabled, &s.CreatedBy, &s.CreatedAt, &s.UpdatedAt)
+		&s.Enabled, &s.CreatedBy, &s.RecipientEmail, &s.CreatedAt, &s.UpdatedAt)
 	return s, err
 }
 
 func (s *SchedStore) CreateSchedule(ctx context.Context, in Schedule) (Schedule, error) {
 	return scanSchedule(s.pool.QueryRow(ctx, `INSERT INTO schedules
 		(tenant_id, account_ids, report_kind, window_kind, group_by, prefix_len,
-		 frequency, at_hour, at_minute, weekday, day_of_month, enabled, created_by)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+		 frequency, at_hour, at_minute, weekday, day_of_month, enabled, created_by, recipient_email)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		RETURNING `+scheduleColumns,
 		in.TenantID, in.AccountIDs, in.ReportKind, in.WindowKind, in.GroupBy, in.PrefixLen,
-		in.Frequency, in.AtHour, in.AtMinute, in.Weekday, in.DayOfMonth, in.Enabled, in.CreatedBy))
+		in.Frequency, in.AtHour, in.AtMinute, in.Weekday, in.DayOfMonth, in.Enabled, in.CreatedBy,
+		in.RecipientEmail))
 }
 
 func (s *SchedStore) GetSchedule(ctx context.Context, id string) (Schedule, error) {
