@@ -196,3 +196,25 @@ func TestAllowedStorageTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestMatrixCoversManifestClasses(t *testing.T) {
+	m, err := loadManifest("../../docs/compliance/data-classification.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile("../../docs/compliance/popia-control-matrix.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matrix := string(data)
+	for _, class := range m.Classes {
+		if !strings.Contains(matrix, "`"+class.ID+"`") {
+			t.Errorf("matrix does not reference class %q", class.ID)
+		}
+	}
+	for _, control := range m.Controls {
+		if !strings.Contains(matrix, "`"+control.ID+"`") {
+			t.Errorf("matrix does not reference control %q", control.ID)
+		}
+	}
+}

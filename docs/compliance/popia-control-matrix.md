@@ -1,0 +1,26 @@
+# POPIA control matrix
+
+Status: engineering-ready draft. This document is not legal advice.
+Source controls: `docs/master-plan.md` sections 5 and 6.
+Manifest: `data-classification.json`.
+
+| Obligation | Instrument | Design control | Manifest class IDs | Evidence | Status | Assumption / counsel gate | Engineering sign-off | Information Officer sign-off | Legal sign-off |
+|---|---|---|---|---|---|---|---|---|---|
+| Data minimisation | POPIA s10 / `popia-s10` | Only required call, account, and operator fields are stored per flow. | `cdr`, `charging_session`, `identity`, `sbc_security` | `services/mediation/main.go`, `services/identity/identity.go`, `services/sbc/migrate.sql` | documented_target | Counsel must confirm field-level minimisation. |  |  |  |
+| Purpose limitation | POPIA s11 / `popia-s11` | Every class declares a purpose and lawful basis. | `cdr`, `charging_financial`, `charging_session`, `billing_financial`, `payment`, `identity`, `identity_session`, `fraud_security`, `fraud_configuration`, `sbc_security`, `report_artifact`, `report_configuration`, `notification_outbox`, `configuration_catalogue_routing` | `data-classification.json` | implemented | Counsel must confirm lawful-basis wording. |  |  |  |
+| Security safeguards | POPIA s19 / `popia-s19` | Tenant scoping, bcrypt, redacted JSON logs, signed artifact links, fraud/SBC controls, and 24h sessions. | `cdr`, `charging_financial`, `identity`, `identity_session`, `fraud_security`, `sbc_security`, `report_artifact`, `report_configuration`, `notification_outbox` | `services/identity/identity.go`, `services/observability/log.go`, `services/reports/main.go`, `services/fraud/fraud.go`, `services/sbc/sbc.go` | implemented | Counsel and security review must confirm safeguard adequacy. |  |  |  |
+| Breach notification | POPIA s22 / `popia-s22` | Detect, contain, preserve evidence, escalate internally within 72 hours, then decide regulator notification. | `cdr`, `identity`, `notification_outbox` | `runbooks/breach-notification.md` | counsel_required | Regulator and deadline details require counsel confirmation. |  |  |  |
+| Information Officer and PAIA | POPIA ss55-56 / `popia-ss55-56` | Runbook defines intake, verification, tenant scoping, and response assembly from the manifest. | `identity`, `identity_session` | `runbooks/information-officer-paia.md` | counsel_required | The 30-day target response window needs counsel confirmation. |  |  |  |
+| Cross-border transfer | POPIA s72 / `popia-s72` | Every class is covered by a jurisdiction-transfer assumption for the chosen deployment. | `cdr`, `charging_financial`, `charging_session`, `billing_financial`, `payment`, `identity`, `identity_session`, `fraud_security`, `fraud_configuration`, `sbc_security`, `report_artifact`, `report_configuration`, `notification_outbox`, `configuration_catalogue_routing` | `data-classification.json` | counsel_required | Deployment region and transfer mechanism need counsel validation. |  |  |  |
+| RICA subscriber verification | RICA / `rica-kyc` | KYC is out of scope; identity and CDR classes record the assumption that an operator performs subscriber verification upstream. | `identity`, `cdr` | `docs/master-plan.md`, `data-classification.json` | counsel_required | Counsel must confirm whether upstream verification satisfies RICA duties. |  |  |  |
+| RICA lawful intercept | RICA / `rica-intercept` | Lawful-intercept hooks are out of scope; CDR and SBC classes record the assumption. | `cdr`, `sbc_security` | `docs/master-plan.md`, `data-classification.json` | counsel_required | Counsel must confirm statutory intercept obligations. |  |  |  |
+| ICASA licence classification | ICASA / `icasa-licence` | Routing and policy configuration is declared as operator licensing input. | `configuration_catalogue_routing` | `data-classification.json` | counsel_required | Licence category and related reporting need counsel validation. |  |  |  |
+| Traffic-data retention | Traffic retention / `traffic-retention` | CDR, billing, and payment retention defaults are documented; deletion workers are not implemented. | `cdr`, `billing_financial`, `payment` | `runbooks/retention-legal-hold.md`, `data-classification.json` | documented_target | Counsel must confirm statutory traffic and billing periods. |  |  |  |
+| AU Malabo Convention | AU Malabo / `au-malabo` | All classes carry purpose, lawful basis, security, and transfer assumptions. | `cdr`, `charging_financial`, `charging_session`, `billing_financial`, `payment`, `identity`, `identity_session`, `fraud_security`, `fraud_configuration`, `sbc_security`, `report_artifact`, `report_configuration`, `notification_outbox`, `configuration_catalogue_routing` | `data-classification.json` | counsel_required | Ratification and deployment applicability need counsel validation. |  |  |  |
+| AI governance | AI governance / `ai-governance` | Fraud scoring is versioned and advisory; deterministic controls make denial decisions. | `fraud_security`, `fraud_configuration` | `services/fraud/fraud.go`, `docs/fraud-baseline.md` | implemented | Counsel and product owners must confirm explainability and review duties. |  |  |  |
+
+## Sign-off
+
+Engineering review:  ____________________  Date: __________
+Information Officer: ____________________  Date: __________
+Legal / counsel:      ____________________  Date: __________
