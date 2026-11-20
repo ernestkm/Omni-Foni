@@ -1,0 +1,31 @@
+name: Feature request
+description: Propose new behavior
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Who has this problem and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: source_basis
+    attributes:
+      label: Source basis
+      description: Cite S1, S2, S3, or S4 for any claimed upstream feature.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+    validations:
+      required: false
