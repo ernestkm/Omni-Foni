@@ -95,7 +95,8 @@ are required. No new service, endpoint, topic, or money rule is introduced.
   `mediation`, `payments`, `identity`, `reconciliation`, `fraud`, `sbc`,
   `notifications`, `reports`, `sipedge`, `sipuas`, `kamailio`, `jaeger`,
   `mailpit`.
-- Jobs: database initialization, first-call seeding, first-call smoke.
+- Jobs: database initialization and first-call seeding. The first SIP call is
+  run from the host through `kind` host ports, not as an in-cluster Job.
 
 All application images are built with the same Dockerfile context rules used by
 compose, especially the sibling `COPY` requirements for services that use local
@@ -131,28 +132,38 @@ explicitly out of scope for this slice.
 - Catalogue `PutRate` for the first billing rate.
 - Routing `PutTrunk` and `PutLcrRoute` for the first trunk and route.
 
-SQL fallback is limited to seams without an admin API: Charging account,
-SBC/Fraud minimal controls, and the `SIPEDGE_TRUNK_ACCOUNTS` source-IP mapping.
-The SQL fallback uses the same database names and table contracts as
-`ops/postgres-init.sql` and the service `migrate.sql` files. Seeds are keyed by
-stable IDs and use upserts or existence checks so reruns do not duplicate rows.
+SQL fallback is limited to seams without an admin API: Charging account and
+SBC/Fraud minimal controls. The `SIPEDGE_TRUNK_ACCOUNTS` source-IP mapping is
+startup configuration in the Kustomize overlay, not SQL; the first-call script
+discovers the source IP and patches it before the real call. The SQL fallback
+uses the same database names and table contracts as `ops/postgres-init.sql` and
+the service `migrate.sql` files. Seeds are keyed by stable IDs and use upserts or
+existence checks so reruns do not duplicate rows.
 
 ## 6. First billed call and timing
 
 `make k8s-first-call` runs `ops/k8s-first-call.sh`. It:
 
 1. Calls `ops/k8s-seed.sh` if the seed marker is absent.
-2. Generates a unique `call_id`.
-3. Runs the existing `cmd/sipsmoke` path as an in-cluster Job against `sipedge`
-   and `kamailio`, targeting the seeded SIPUAS trunk.
-4. Waits for the call to end and for Mediation/Billing to process the CDR.
-5. Asserts exactly one Billing invoice line for the generated `call_id`.
-6. Reads the install-start marker, prints the total elapsed time, and succeeds
+2. Runs a probe SIP call from the host through `kind` host ports. The probe is
+   expected to be denied as `ip_blocked`; the script extracts the source IP that
+   Kamailio passed to sipedge from the sipedge structured log.
+3. Patches `SIPEDGE_TRUNK_ACCOUNTS` in the reference overlay with that source IP
+   and rolls out sipedge, then reruns the probe until it is allowed.
+4. Generates a unique SIP Call-ID and runs the existing `cmd/sipsmoke` from the
+   host against the `kind` host-port mapping, targeting the seeded SIPUAS trunk.
+5. Waits for the call to end and for Mediation/Billing to process the CDR.
+6. Asserts exactly one Billing invoice line for the seeded account created after
+   the call started, then captures the resulting Billing `call_id`.
+7. Reads the install-start marker, prints the total elapsed time, and succeeds
    only if the assertion passed.
 
 The invoice assertion uses a read-only SQL check through the `postgres` pod,
-querying `billing.invoice_lines` by the generated `call_id`. A timeout, a missing
-invoice line, or more than one invoice line fails the command.
+querying `billing.invoice_lines` by `account_id` and a post-call timestamp rather
+than by the SIP Call-ID: switching generates its own CDR/Billing `call_id`, which
+is not propagated back from sipedge. A timeout, a missing invoice line, or more
+than one invoice line fails the command. The host-run smoke uses the existing
+`cmd/sipsmoke` source path, so no new sipsmoke image is required.
 
 The reference-hardware gate passes only when the elapsed time from the start of
 `make k8s-install` through the successful invoice assertion is under 60 minutes
@@ -168,7 +179,8 @@ state, and print actionable errors. On rollout or assertion failure they print:
 - `kubectl get pods -n omnifoni`;
 - `kubectl describe` for failing pods and Jobs;
 - recent logs for failing containers;
-- the generated `call_id` and the specific failed assertion.
+- the generated SIP Call-ID and Billing `call_id` when known, plus the specific
+  failed assertion.
 
 `make k8s-install` and `make k8s-seed` are safe to rerun. Kustomize apply is
 idempotent, seed IDs are stable, and the first call always uses a fresh
@@ -210,8 +222,9 @@ Out of scope:
   documented hardware minimum and explicit readiness waits mitigate this.
 - **API gaps:** several seed surfaces lack admin APIs. The SQL fallback is
   explicit, narrow, and keyed to stable IDs.
-- **SIP ingress**: UDP host-port mapping in kind can be host dependent. The
-  operator guide documents the supported Linux path and diagnosis steps.
+- **SIP ingress**: UDP host-port mapping in kind can be host dependent, and the
+  source IP seen by sipedge is discovered by a probe call before the real call.
+  The operator guide documents the supported Linux path and diagnosis steps.
 - **Timing interpretation:** image build time is included in the install gate;
   the printed breakdown distinguishes build, rollout, seed, call, and assertion.
 - **Clean-room separation:** no ASTPP material is read or copied; the design is
