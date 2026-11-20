@@ -42,6 +42,7 @@ type ForbiddenTerm struct {
 	Term       string   `json:"term"`
 	Severity   string   `json:"severity"`
 	AllowPaths []string `json:"allow_paths"`
+	ExpiresOn  string   `json:"expires_on"`
 }
 
 type ClaimRule struct {
@@ -100,26 +101,26 @@ func decodeJSONFile(filePath string, value any) error {
 	return nil
 }
 
-func loadPolicy(policyPath string, now time.Time) (*Policy, *LicenceManifest, string, error) {
+func loadPolicy(policyPath string, now time.Time) (*Policy, *LicenceManifest, string, string, error) {
 	var policy Policy
 	if err := decodeJSONFile(policyPath, &policy); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 	if policy.LicencePolicy.Manifest == "" {
-		return nil, nil, "", fmt.Errorf("licence_policy.manifest is required")
+		return nil, nil, "", "", fmt.Errorf("licence_policy.manifest is required")
 	}
 
 	manifestPath := filepath.Join(filepath.Dir(policyPath), policy.LicencePolicy.Manifest)
 	var manifest LicenceManifest
 	if err := decodeJSONFile(manifestPath, &manifest); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
 
 	root := filepath.Clean(filepath.Join(filepath.Dir(policyPath), policy.Root))
 	if err := validatePolicy(&policy, &manifest, now); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", "", err
 	}
-	return &policy, &manifest, root, nil
+	return &policy, &manifest, root, manifestPath, nil
 }
 
 func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
@@ -162,6 +163,9 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 		if exclude == "" {
 			return fmt.Errorf("exclude_paths cannot contain an empty value")
 		}
+		if err := validateGlob("exclude_paths", exclude); err != nil {
+			return err
+		}
 	}
 
 	validSeverity := map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
@@ -171,6 +175,9 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 	for _, artifact := range p.ForbiddenArtifacts {
 		if artifact.Pattern == "" {
 			return fmt.Errorf("forbidden artifact pattern is required")
+		}
+		if err := validateGlob("forbidden_artifact_patterns", artifact.Pattern); err != nil {
+			return err
 		}
 		if !validSeverity[artifact.Severity] {
 			return fmt.Errorf("invalid severity %q for artifact %q", artifact.Severity, artifact.Pattern)
@@ -186,6 +193,16 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 		if !validSeverity[term.Severity] {
 			return fmt.Errorf("invalid severity %q for term %q", term.Severity, term.Term)
 		}
+		for _, allowPath := range term.AllowPaths {
+			if err := validateGlob("forbidden_terms.allow_paths", allowPath); err != nil {
+				return err
+			}
+		}
+		if term.ExpiresOn != "" {
+			if _, err := time.Parse("2006-01-02", term.ExpiresOn); err != nil {
+				return fmt.Errorf("forbidden term %q has invalid expires_on %q", term.Term, term.ExpiresOn)
+			}
+		}
 	}
 	if len(p.ClaimRules) == 0 {
 		return fmt.Errorf("claim_rules must not be empty")
@@ -193,6 +210,9 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 	for _, rule := range p.ClaimRules {
 		if rule.PathGlob == "" {
 			return fmt.Errorf("claim rule path_glob is required")
+		}
+		if err := validateGlob("claim_rules.path_glob", rule.PathGlob); err != nil {
+			return err
 		}
 	}
 
@@ -219,12 +239,10 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 		}
 	}
 
-	allowed := map[string]LicenceRule{}
 	for _, rule := range p.LicencePolicy.Allow {
 		if rule.Licence == "" {
 			return fmt.Errorf("licence_policy.allow licence is required")
 		}
-		allowed[rule.Licence] = rule
 	}
 	if len(m.Components) == 0 {
 		return fmt.Errorf("licence manifest must declare components")
@@ -232,16 +250,6 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 	for _, component := range m.Components {
 		if component.Name == "" || component.Version == "" || component.Licence == "" || component.Distribution == "" {
 			return fmt.Errorf("licence manifest component %q has missing identity fields", component.Name)
-		}
-		if denied[component.Licence] {
-			return fmt.Errorf("component %q declares denied licence %q", component.Name, component.Licence)
-		}
-		rule, ok := allowed[component.Licence]
-		if !ok {
-			return fmt.Errorf("component %q declares unlisted licence %q", component.Name, component.Licence)
-		}
-		if rule.Distribution != "" && rule.Distribution != component.Distribution {
-			return fmt.Errorf("component %q distribution %q is invalid for licence %q", component.Name, component.Distribution, component.Licence)
 		}
 	}
 
@@ -254,6 +262,9 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 			return fmt.Errorf("duplicate exception id %q", exception.ID)
 		}
 		seenExceptions[exception.ID] = true
+		if err := validateGlob("exceptions.path_glob", exception.PathGlob); err != nil {
+			return err
+		}
 		expiry, err := time.Parse("2006-01-02", exception.ExpiresOn)
 		if err != nil {
 			return fmt.Errorf("exception %q has invalid expires_on %q", exception.ID, exception.ExpiresOn)
@@ -262,6 +273,16 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 		if expiry.Before(today) {
 			return fmt.Errorf("exception %q expired on %s", exception.ID, exception.ExpiresOn)
 		}
+	}
+	return nil
+}
+
+func validateGlob(kind, glob string) error {
+	if strings.Contains(glob, "**") {
+		return fmt.Errorf("%s %q must not use **; * does not cross directories", kind, glob)
+	}
+	if _, err := path.Match(glob, ""); err != nil {
+		return fmt.Errorf("%s %q is not a valid glob: %w", kind, glob, err)
 	}
 	return nil
 }
@@ -297,6 +318,18 @@ func exceptionApplies(p *Policy, ruleID, rel string, now time.Time) bool {
 		}
 	}
 	return false
+}
+
+func termAllowPathsActive(term ForbiddenTerm, now time.Time) bool {
+	if term.ExpiresOn == "" {
+		return true
+	}
+	expiry, err := time.Parse("2006-01-02", term.ExpiresOn)
+	if err != nil {
+		return false
+	}
+	today := time.Date(now.UTC().Year(), now.UTC().Month(), now.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	return !today.After(expiry)
 }
 
 func containsString(values []string, target string) bool {

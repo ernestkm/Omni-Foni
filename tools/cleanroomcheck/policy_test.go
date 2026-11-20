@@ -70,7 +70,7 @@ func TestLoadPolicyRejectsUnknownFields(t *testing.T) {
 	}
 	writeJSON(t, manifestPath, validManifest())
 
-	_, _, _, err := loadPolicy(policyPath, time.Now())
+	_, _, _, _, err := loadPolicy(policyPath, time.Now())
 	if err == nil {
 		t.Fatal("expected unknown field error")
 	}
@@ -79,14 +79,94 @@ func TestLoadPolicyRejectsUnknownFields(t *testing.T) {
 	}
 }
 
-func TestValidatePolicyRejectsDeniedLicence(t *testing.T) {
+func TestValidatePolicyAllowsDeniedLicenceThroughToFindings(t *testing.T) {
 	p := validPolicy()
 	m := validManifest()
 	m.Components[0].Licence = "BUSL"
 
-	err := validatePolicy(p, m, time.Now())
+	if err := validatePolicy(p, m, time.Now()); err != nil {
+		t.Fatalf("licence violations must be findings, not policy errors: %v", err)
+	}
+	if findings := checkLicences(m, p, "docs/compliance/licence-manifest.json"); len(findings) != 1 {
+		t.Fatalf("expected one licence.denied finding, got %#v", findings)
+	}
+}
+
+func TestValidatePolicyAcceptsCommittedManifestLicences(t *testing.T) {
+	p := validPolicy()
+	p.LicencePolicy.Allow = []LicenceRule{
+		{Licence: "GPL-3.0", Distribution: "separate-binary"},
+		{Licence: "GPL-3.0", Distribution: "tool"},
+	}
+	m := validManifest()
+	m.Components = []Component{
+		{Name: "rtpengine", Version: "master-plan", Licence: "GPL-3.0", Distribution: "separate-binary"},
+		{Name: "ansible", Version: "master-plan", Licence: "GPL-3.0", Distribution: "tool"},
+	}
+
+	if err := validatePolicy(p, m, time.Now()); err != nil {
+		t.Fatalf("expected two GPL-3.0 contexts to validate, got %v", err)
+	}
+}
+
+func TestValidatePolicyRejectsMalformedGlobs(t *testing.T) {
+	cases := map[string]func(*Policy){
+		"claim_rules.path_glob": func(p *Policy) {
+			p.ClaimRules = []ClaimRule{{PathGlob: "docs/[a-"}}
+		},
+		"forbidden_artifact_patterns": func(p *Policy) {
+			p.ForbiddenArtifacts = []ForbiddenArtifact{{Pattern: "vendor/astpp[", Severity: "high"}}
+		},
+		"forbidden_terms.allow_paths": func(p *Policy) {
+			p.ForbiddenTerms[0].AllowPaths = []string{"docs/[a-"}
+		},
+		"exclude_paths": func(p *Policy) {
+			p.ExcludePaths = append(p.ExcludePaths, "build/[a-")
+		},
+		"exceptions.path_glob": func(p *Policy) {
+			p.Exceptions = []Exception{{
+				ID:        "broken",
+				RuleID:    "term.forbidden",
+				PathGlob:  "legacy/[a-",
+				Reason:    "reviewed",
+				Owner:     "maintainers",
+				ExpiresOn: "2099-01-01",
+			}}
+		},
+	}
+	for name, mutate := range cases {
+		p := validPolicy()
+		mutate(p)
+		err := validatePolicy(p, validManifest(), time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
+		if err == nil {
+			t.Fatalf("%s: expected malformed glob error", name)
+		}
+		if !strings.Contains(err.Error(), "glob") {
+			t.Fatalf("%s: expected glob error, got %v", name, err)
+		}
+	}
+}
+
+func TestValidatePolicyRejectsDoubleStarGlobs(t *testing.T) {
+	p := validPolicy()
+	p.ClaimRules = []ClaimRule{{PathGlob: "docs/**"}}
+
+	err := validatePolicy(p, validManifest(), time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
 	if err == nil {
-		t.Fatal("expected denied licence error")
+		t.Fatal("expected ** glob error")
+	}
+	if !strings.Contains(err.Error(), "**") {
+		t.Fatalf("expected ** in error, got %v", err)
+	}
+}
+
+func TestValidatePolicyRejectsInvalidTermExpiry(t *testing.T) {
+	p := validPolicy()
+	p.ForbiddenTerms[0].ExpiresOn = "2099-13-01"
+
+	err := validatePolicy(p, validManifest(), time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("expected invalid expires_on error")
 	}
 }
 

@@ -45,7 +45,10 @@ func checkTerms(files []scannedFile, p *Policy, now time.Time) []Finding {
 	var findings []Finding
 	for _, file := range files {
 		for _, term := range p.ForbiddenTerms {
-			if isInPaths(file.Path, term.AllowPaths) || exceptionApplies(p, "term.forbidden", file.Path, now) {
+			if termAllowPathsActive(term, now) && isInPaths(file.Path, term.AllowPaths) {
+				continue
+			}
+			if exceptionApplies(p, "term.forbidden", file.Path, now) {
 				continue
 			}
 			for index, line := range file.Lines {
@@ -95,15 +98,15 @@ func checkClaims(files []scannedFile, p *Policy) []Finding {
 	return findings
 }
 
-func checkLicences(m *LicenceManifest, p *Policy) []Finding {
+func checkLicences(m *LicenceManifest, p *Policy, manifestPath string) []Finding {
 	var findings []Finding
 	denied := map[string]bool{}
 	for _, licence := range p.LicencePolicy.Deny {
 		denied[licence] = true
 	}
-	allowed := map[string]LicenceRule{}
+	allowed := map[string][]LicenceRule{}
 	for _, rule := range p.LicencePolicy.Allow {
-		allowed[rule.Licence] = rule
+		allowed[rule.Licence] = append(allowed[rule.Licence], rule)
 	}
 
 	for _, component := range m.Components {
@@ -111,41 +114,39 @@ func checkLicences(m *LicenceManifest, p *Policy) []Finding {
 			findings = append(findings, Finding{
 				Severity:    "critical",
 				RuleID:      "licence.denied",
-				Path:        "docs/compliance/licence-manifest.json",
+				Path:        manifestPath,
 				Line:        0,
 				Snippet:     fmt.Sprintf("%s %s: %s", component.Name, component.Version, component.Licence),
 				Remediation: "Remove the component or replace it with an approved FOSS licence",
 			})
 			continue
 		}
-		rule, ok := allowed[component.Licence]
-		if !ok {
+		rules, ok := allowed[component.Licence]
+		if !ok || !licenceDistributionAllowed(rules, component.Distribution) {
 			findings = append(findings, Finding{
 				Severity:    "high",
 				RuleID:      "licence.not_allowed",
-				Path:        "docs/compliance/licence-manifest.json",
-				Line:        0,
-				Snippet:     fmt.Sprintf("%s %s: %s", component.Name, component.Version, component.Licence),
-				Remediation: "Add the licence to docs/master-plan.md section 4 and the allowlist",
-			})
-			continue
-		}
-		if rule.Distribution != "" && rule.Distribution != component.Distribution {
-			findings = append(findings, Finding{
-				Severity:    "high",
-				RuleID:      "licence.not_allowed",
-				Path:        "docs/compliance/licence-manifest.json",
+				Path:        manifestPath,
 				Line:        0,
 				Snippet:     fmt.Sprintf("%s %s: %s on %s", component.Name, component.Version, component.Licence, component.Distribution),
-				Remediation: "Use the approved distribution context or update the policy allowlist",
+				Remediation: "Add the licence and distribution context to docs/master-plan.md section 4 and the allowlist",
 			})
 		}
 	}
 	return findings
 }
 
+func licenceDistributionAllowed(rules []LicenceRule, distribution string) bool {
+	for _, rule := range rules {
+		if rule.Distribution == "" || rule.Distribution == distribution {
+			return true
+		}
+	}
+	return false
+}
+
 func runAudit(policyPath string, now time.Time) ([]Finding, error) {
-	p, manifest, root, err := loadPolicy(policyPath, now)
+	p, manifest, root, manifestPath, err := loadPolicy(policyPath, now)
 	if err != nil {
 		return nil, err
 	}
@@ -153,23 +154,21 @@ func runAudit(policyPath string, now time.Time) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
-	files = excludeAuditConfigFiles(root, policyPath, p, files)
+	files = excludeAuditConfigFiles(root, policyPath, files)
 
 	var findings []Finding
 	findings = append(findings, checkArtifacts(files, p, now)...)
 	findings = append(findings, checkTerms(files, p, now)...)
 	findings = append(findings, checkClaims(files, p)...)
-	findings = append(findings, checkLicences(manifest, p)...)
+	findings = append(findings, checkLicences(manifest, p, filepath.ToSlash(manifestPath))...)
 	sortFindings(findings)
 	return findings, nil
 }
 
-func excludeAuditConfigFiles(root, policyPath string, p *Policy, files []scannedFile) []scannedFile {
+func excludeAuditConfigFiles(root, policyPath string, files []scannedFile) []scannedFile {
 	configPaths := map[string]bool{}
-	for _, candidate := range []string{policyPath, filepath.Join(filepath.Dir(policyPath), p.LicencePolicy.Manifest)} {
-		if rel, err := filepath.Rel(root, candidate); err == nil {
-			configPaths[filepath.ToSlash(rel)] = true
-		}
+	if rel, err := filepath.Rel(root, policyPath); err == nil {
+		configPaths[filepath.ToSlash(rel)] = true
 	}
 	kept := files[:0]
 	for _, file := range files {
@@ -182,7 +181,7 @@ func excludeAuditConfigFiles(root, policyPath string, p *Policy, files []scanned
 }
 
 func sortFindings(findings []Finding) {
-	sort.Slice(findings, func(i, j int) bool {
+	sort.SliceStable(findings, func(i, j int) bool {
 		if findings[i].Path != findings[j].Path {
 			return findings[i].Path < findings[j].Path
 		}
@@ -192,7 +191,10 @@ func sortFindings(findings []Finding) {
 		if findings[i].RuleID != findings[j].RuleID {
 			return findings[i].RuleID < findings[j].RuleID
 		}
-		return findings[i].Severity < findings[j].Severity
+		if findings[i].Severity != findings[j].Severity {
+			return findings[i].Severity < findings[j].Severity
+		}
+		return findings[i].Snippet < findings[j].Snippet
 	})
 }
 

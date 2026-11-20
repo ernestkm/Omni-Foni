@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,12 +56,72 @@ func TestCheckLicencesRejectsDeniedAndUnlisted(t *testing.T) {
 		Component{Name: "unlisted", Version: "1", Licence: "ISC", Distribution: "library"},
 	)
 
-	findings := checkLicences(m, p)
+	findings := checkLicences(m, p, "docs/compliance/licence-manifest.json")
 	if len(findings) != 2 {
 		t.Fatalf("expected two licence findings, got %#v", findings)
 	}
 	if findings[0].RuleID != "licence.denied" || findings[1].RuleID != "licence.not_allowed" {
 		t.Fatalf("unexpected licence findings %#v", findings)
+	}
+	if findings[0].Path != "docs/compliance/licence-manifest.json" {
+		t.Fatalf("expected licence findings to name the manifest, got %#v", findings[0])
+	}
+}
+
+func TestCheckLicencesEnforcesDistributionContext(t *testing.T) {
+	p := validPolicy()
+	p.LicencePolicy.Allow = []LicenceRule{
+		{Licence: "GPL-3.0", Distribution: "separate-binary"},
+		{Licence: "GPL-3.0", Distribution: "tool"},
+	}
+	m := validManifest()
+	m.Components = []Component{
+		{Name: "rtpengine", Version: "master-plan", Licence: "GPL-3.0", Distribution: "separate-binary"},
+		{Name: "ansible", Version: "master-plan", Licence: "GPL-3.0", Distribution: "tool"},
+		{Name: "linked", Version: "1", Licence: "GPL-3.0", Distribution: "linked"},
+	}
+
+	findings := checkLicences(m, p, "docs/compliance/licence-manifest.json")
+	if len(findings) != 1 {
+		t.Fatalf("expected one distribution finding, got %#v", findings)
+	}
+	if findings[0].RuleID != "licence.not_allowed" || !strings.Contains(findings[0].Snippet, "linked") {
+		t.Fatalf("unexpected finding %#v", findings[0])
+	}
+}
+
+func TestCheckTermsAllowPathsExpire(t *testing.T) {
+	p := validPolicy()
+	p.ForbiddenTerms[0].AllowPaths = []string{"docs/"}
+	p.ForbiddenTerms[0].ExpiresOn = "2026-01-01"
+	files := []scannedFile{{Path: "docs/note.md", Lines: []string{"ASTPP source"}}}
+
+	if findings := checkTerms(files, p, time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC)); len(findings) != 0 {
+		t.Fatalf("expected allow path to apply before expiry, got %#v", findings)
+	}
+	findings := checkTerms(files, p, time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC))
+	if len(findings) != 1 {
+		t.Fatalf("expected allow path to stop applying after expiry, got %#v", findings)
+	}
+}
+
+func TestExcludeAuditConfigFilesKeepsLicenceManifest(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "policy.json")
+	files := []scannedFile{
+		{Path: "policy.json", Lines: []string{"{}"}},
+		{Path: "licence-manifest.json", Lines: []string{"{\"components\": []}"}},
+		{Path: "docs/a.md", Lines: []string{"body"}},
+	}
+
+	kept := excludeAuditConfigFiles(dir, policyPath, files)
+	if len(kept) != 2 {
+		t.Fatalf("expected policy excluded and manifest kept, got %#v", kept)
+	}
+	for _, file := range kept {
+		if file.Path == "policy.json" {
+			t.Fatalf("policy file should be excluded, got %#v", kept)
+		}
 	}
 }
 
@@ -117,5 +178,42 @@ func TestRunAuditSortsAndReturnsFindings(t *testing.T) {
 	}
 	if len(findings) != 1 || findings[0].RuleID != "term.forbidden" {
 		t.Fatalf("expected one term finding, got %#v", findings)
+	}
+}
+
+func TestRunAuditReportsDeniedLicenceAndWritesReport(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "policy.json")
+	policy := validPolicy()
+	writeJSON(t, policyPath, policy)
+	manifest := validManifest()
+	manifest.Components[0].Licence = "BUSL"
+	writeJSON(t, filepath.Join(dir, "licence-manifest.json"), manifest)
+
+	result, err := execute(policyPath, filepath.Join(dir, "reports"), "text", time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatalf("denied licence must be a finding, not an error: %v", err)
+	}
+	if result.ExitCode != 1 {
+		t.Fatalf("expected exit 1, got %d: %s", result.ExitCode, result.Output)
+	}
+	if !strings.Contains(result.Output, "licence.denied") {
+		t.Fatalf("expected licence.denied in output, got %q", result.Output)
+	}
+	for _, name := range []string{"cleanroom-report.txt", "cleanroom-report.json"} {
+		if _, err := os.Stat(filepath.Join(dir, "reports", name)); err != nil {
+			t.Fatalf("expected report %s to be written: %v", name, err)
+		}
+	}
+}
+
+func TestExecuteRejectsUnknownFormat(t *testing.T) {
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "policy.json")
+	writeJSON(t, policyPath, validPolicy())
+	writeJSON(t, filepath.Join(dir, "licence-manifest.json"), validManifest())
+
+	if _, err := execute(policyPath, "", "xml", time.Now()); err == nil {
+		t.Fatal("expected unknown format error")
 	}
 }
