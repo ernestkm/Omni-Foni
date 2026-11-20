@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "root": "../..",
+  "source_basis": {
+    "allowed": [
+      {
+        "id": "S1",
+        "status": "partially retrieved",
+        "locations": ["docs/master-plan.md"]
+      },
+      {
+        "id": "S2",
+        "status": "unavailable",
+        "locations": ["docs/master-plan.md"]
+      },
+      {
+        "id": "S3",
+        "status": "fully retrieved",
+        "locations": ["docs/master-plan.md"]
+      },
+      {
+        "id": "S4",
+        "status": "fully retrieved",
+        "locations": ["docs/master-plan.md"]
+      }
+    ]
+  },
+  "exclude_paths": [
+    ".git/",
+    ".worktrees/",
+    "artifacts/"
+  ],
+  "forbidden_artifact_patterns": [
+    { "pattern": "vendor/astpp*", "severity": "high" },
+    { "pattern": "third_party/astpp*", "severity": "high" },
+    { "pattern": "*astpp*.sql", "severity": "high" },
+    { "pattern": "*astpp*.tar.gz", "severity": "high" },
+    { "pattern": "*astpp*.zip", "severity": "high" },
+    { "pattern": "*astpp*.patch", "severity": "high" },
+    { "pattern": "astpp/COPYING*", "severity": "high" },
+    { "pattern": "astpp/LICENSE*", "severity": "high" }
+  ],
+  "forbidden_terms": [
+    {
+      "term": "ASTPP",
+      "severity": "high",
+      "allow_paths": ["AGENTS.md", "CONTRIBUTING.md", "docs/", "tools/cleanroomcheck/"]
+    },
+    {
+      "term": "astppbilling.org",
+      "severity": "high",
+      "allow_paths": ["docs/master-plan.md", "tools/cleanroomcheck/"]
+    },
+    {
+      "term": "vendor_astpp",
+      "severity": "high",
+      "allow_paths": ["docs/", "tools/cleanroomcheck/"]
+    },
+    {
+      "term": "astpp.sql",
+      "severity": "high",
+      "allow_paths": ["docs/", "tools/cleanroomcheck/"]
+    }
+  ],
+  "claim_rules": [
+    { "path_glob": "docs/master-plan.md" },
+    { "path_glob": "docs/compliance/cleanroom-audit.md" },
+    { "path_glob": "docs/superpowers/specs/2026-11-20-clean-room-audit-design.md" },
+    { "path_glob": "docs/superpowers/plans/2026-11-20-clean-room-audit.md" }
+  ],
+  "licence_policy": {
+    "manifest": "licence-manifest.json",
+    "allow": [
+      { "licence": "MIT, BSD-3", "notes": "master-plan section 4 Python/FastAPI/Pydantic row" },
+      { "licence": "Apache-2.0", "notes": "master-plan section 4" },
+      { "licence": "BSD-3", "notes": "master-plan section 4" },
+      { "licence": "GPLv2 or later, with link exceptions", "notes": "master-plan section 4 Kamailio" },
+      { "licence": "GPLv2 with OpenSSL link exception", "notes": "master-plan section 4 OpenSIPS" },
+      { "licence": "MPL-1.1", "notes": "master-plan section 4 FreeSWITCH" },
+      { "licence": "GPL-3.0", "notes": "master-plan section 4 rtpengine (separate binary) and Ansible (tool)" },
+      { "licence": "PostgreSQL Licence", "notes": "master-plan section 4" },
+      { "licence": "AGPL-3.0", "distribution": "server-side", "notes": "master-plan section 4 Grafana" },
+      { "licence": "MIT", "notes": "master-plan section 4 frontend libraries" },
+      { "licence": "MPL-2.0", "notes": "master-plan section 4 OpenTofu" }
+    ],
+    "deny": ["BUSL", "RSALv2", "SSPL", "proprietary", "unknown"]
+  },
+  "exceptions": []
+}

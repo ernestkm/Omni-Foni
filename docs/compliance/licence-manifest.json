@@ -1,0 +1,26 @@
+{
+  "components": [
+    { "name": "Python 3.12, FastAPI, Pydantic", "version": "3.12 / master-plan", "licence": "MIT, BSD-3", "distribution": "mixed" },
+    { "name": "Go", "version": "1.24", "licence": "BSD-3", "distribution": "toolchain" },
+    { "name": "Kamailio", "version": "5.8", "licence": "GPLv2 or later, with link exceptions", "distribution": "separate-binary" },
+    { "name": "OpenSIPS", "version": "3.6", "licence": "GPLv2 with OpenSSL link exception", "distribution": "separate-binary" },
+    { "name": "FreeSWITCH", "version": "master-plan", "licence": "MPL-1.1", "distribution": "separate-binary" },
+    { "name": "rtpengine", "version": "master-plan", "licence": "GPL-3.0", "distribution": "separate-binary" },
+    { "name": "PostgreSQL", "version": "17", "licence": "PostgreSQL Licence", "distribution": "container" },
+    { "name": "Valkey", "version": "8", "licence": "BSD-3", "distribution": "container" },
+    { "name": "Apache Kafka", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "ClickHouse", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "Keycloak", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "APISIX", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "OpenTelemetry", "version": "master-plan", "licence": "Apache-2.0", "distribution": "library" },
+    { "name": "Prometheus", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "Loki", "version": "master-plan", "licence": "Apache-2.0", "distribution": "container" },
+    { "name": "Grafana", "version": "master-plan", "licence": "AGPL-3.0", "distribution": "server-side" },
+    { "name": "Kubernetes", "version": "master-plan", "licence": "Apache-2.0", "distribution": "platform" },
+    { "name": "gVisor", "version": "master-plan", "licence": "Apache-2.0", "distribution": "runtime" },
+    { "name": "OpenTofu", "version": "master-plan", "licence": "MPL-2.0", "distribution": "tool" },
+    { "name": "Ansible", "version": "master-plan", "licence": "GPL-3.0", "distribution": "tool" },
+    { "name": "React", "version": "master-plan", "licence": "MIT", "distribution": "frontend" },
+    { "name": "SvelteKit", "version": "master-plan", "licence": "MIT", "distribution": "frontend" }
+  ]
+}
