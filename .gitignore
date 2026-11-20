@@ -10,4 +10,5 @@ target/
 .vscode/
 services/sipedge/sipsmoke
 .worktrees/
+.superpowers/
 artifacts/
