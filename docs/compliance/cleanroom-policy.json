@@ -28,7 +28,8 @@
   "exclude_paths": [
     ".git/",
     ".worktrees/",
-    "artifacts/"
+    "artifacts/",
+    ".superpowers/"
   ],
   "forbidden_artifact_patterns": [
     { "pattern": "vendor/astpp*", "severity": "high" },
@@ -49,7 +50,13 @@
     {
       "term": "astppbilling.org",
       "severity": "high",
-      "allow_paths": ["docs/master-plan.md", "tools/cleanroomcheck/"]
+      "allow_paths": [
+        "docs/master-plan.md",
+        "tools/cleanroomcheck/",
+        "docs/compliance/cleanroom-audit.md",
+        "docs/superpowers/specs/2026-11-20-clean-room-audit-design.md",
+        "docs/superpowers/plans/2026-11-20-clean-room-audit.md"
+      ]
     },
     {
       "term": "vendor_astpp",

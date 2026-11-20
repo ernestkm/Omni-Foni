@@ -153,7 +153,7 @@ func validatePolicy(p *Policy, m *LicenceManifest, now time.Time) error {
 		}
 	}
 
-	for _, required := range []string{".git/", ".worktrees/", "artifacts/"} {
+	for _, required := range []string{".git/", ".worktrees/", "artifacts/", ".superpowers/"} {
 		if !containsString(p.ExcludePaths, required) {
 			return fmt.Errorf("exclude_paths must contain %s", required)
 		}

@@ -32,7 +32,7 @@ func validPolicy() *Policy {
 				{ID: "S4", Status: "fully retrieved", Locations: []string{"docs/master-plan.md"}},
 			},
 		},
-		ExcludePaths: []string{".git/", ".worktrees/", "artifacts/"},
+		ExcludePaths: []string{".git/", ".worktrees/", "artifacts/", ".superpowers/"},
 		ForbiddenArtifacts: []ForbiddenArtifact{
 			{Pattern: "vendor/astpp*", Severity: "high"},
 		},
@@ -136,5 +136,51 @@ func TestExceptionApplies(t *testing.T) {
 	}
 	if exceptionApplies(p, "artifact.forbidden", "legacy/file.txt", now) {
 		t.Fatal("exception must be rule scoped")
+	}
+}
+
+func TestValidatePolicyRequiresSuperpowersExclude(t *testing.T) {
+	p := validPolicy()
+	p.ExcludePaths = []string{".git/", ".worktrees/", "artifacts/"}
+
+	err := validatePolicy(p, validManifest(), time.Date(2026, 11, 20, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("expected missing .superpowers/ exclude error")
+	}
+}
+
+func TestCommittedPolicyExcludesSDDArtifactsAndAllowsDocumentationQuotes(t *testing.T) {
+	var p Policy
+	policyPath := filepath.Join("..", "..", "docs", "compliance", "cleanroom-policy.json")
+	if err := decodeJSONFile(policyPath, &p); err != nil {
+		t.Fatal(err)
+	}
+	if !containsString(p.ExcludePaths, ".superpowers/") {
+		t.Fatalf("expected .superpowers/ in exclude_paths, got %#v", p.ExcludePaths)
+	}
+
+	var term *ForbiddenTerm
+	for index := range p.ForbiddenTerms {
+		if p.ForbiddenTerms[index].Term == "astppbilling.org" {
+			term = &p.ForbiddenTerms[index]
+		}
+	}
+	if term == nil {
+		t.Fatal("expected astppbilling.org forbidden term")
+	}
+	want := map[string]bool{
+		"docs/master-plan.md":                                          true,
+		"tools/cleanroomcheck/":                                        true,
+		"docs/compliance/cleanroom-audit.md":                           true,
+		"docs/superpowers/specs/2026-11-20-clean-room-audit-design.md": true,
+		"docs/superpowers/plans/2026-11-20-clean-room-audit.md":        true,
+	}
+	if len(term.AllowPaths) != len(want) {
+		t.Fatalf("expected %d exact allow paths, got %#v", len(want), term.AllowPaths)
+	}
+	for _, allowPath := range term.AllowPaths {
+		if !want[allowPath] {
+			t.Fatalf("unexpected allow path %q in %#v", allowPath, term.AllowPaths)
+		}
 	}
 }
