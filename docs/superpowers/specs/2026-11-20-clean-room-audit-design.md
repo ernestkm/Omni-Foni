@@ -96,9 +96,11 @@ No service code, proto, schema, Compose, or Kubernetes manifest changes.
   reuse. Each term has `severity`, `allow_paths`, and optional `expires_on`.
   `ASTPP` and the four source-page URL fragments may only appear in allowlisted
   documentation.
-- `claim_rules`: path globs for claim-bearing docs. Each rule requires either a
-  `Source basis:` line or, for `docs/master-plan.md`, the canonical
-  `## 0. Source status and verification basis` heading, and at least one valid
+- `claim_rules`: path globs for claim-bearing docs. Each rule requires one of a
+  `Source basis:` line, the existing
+  `Feature claims come only from the four ASTPP marketing pages cited in`
+  statement, or, for `docs/master-plan.md`, the canonical
+  `## 0. Source status and verification basis` heading, plus at least one valid
   source ID (`S1`–`S4`). The check is deterministic: it verifies declarations,
   not natural-language semantics.
 - `licence_policy`: `manifest` points to `licence-manifest.json`; `allow` lists
