@@ -1,4 +1,6 @@
-.PHONY: up down ps smoke logs test protoc compliance
+.PHONY: up down ps smoke logs test protoc compliance up-gvisor down-gvisor check-gvisor smoke-gvisor
+
+COMPOSE_GVISOR := docker compose -f docker-compose.yml -f docker-compose.gvisor.yml
 
 up:
 	docker compose up -d --wait
@@ -14,6 +16,19 @@ logs:
 
 smoke:
 	bash ops/smoke.sh
+
+up-gvisor:
+	$(COMPOSE_GVISOR) up -d --wait
+
+down-gvisor:
+	$(COMPOSE_GVISOR) down
+
+check-gvisor:
+	bash ops/check-gvisor.sh
+
+smoke-gvisor:
+	bash ops/smoke.sh
+	bash ops/check-gvisor.sh
 
 compliance:
 	cd tools/compliancecheck && go vet ./... && go test ./... && go run . ../../docs/compliance/data-classification.json
