@@ -3,6 +3,7 @@
 Date: 2026-11-20
 Status: approved (design)
 Slice: P7 (GA), second slice
+Source basis: S1, S2, S3, S4
 
 ## 1. Context
 
