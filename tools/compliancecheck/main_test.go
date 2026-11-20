@@ -165,3 +165,34 @@ func TestValidateManifestRejectsInvalidFixtures(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckedInManifest(t *testing.T) {
+	m, err := loadManifest("../../docs/compliance/data-classification.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.validate("../.."); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Classes) != 14 {
+		t.Fatalf("got %d classes, want 14", len(m.Classes))
+	}
+}
+
+func TestAllowedStorageTargets(t *testing.T) {
+	m, err := loadManifest("../../docs/compliance/data-classification.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	used := map[string]bool{}
+	for _, class := range m.Classes {
+		for _, target := range class.Storage {
+			used[storageKey(target)] = true
+		}
+	}
+	for key := range allowedStorageTargets {
+		if !used[key] {
+			t.Errorf("allowlist entry %q is unused by the manifest", key)
+		}
+	}
+}

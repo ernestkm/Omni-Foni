@@ -1,0 +1,794 @@
+{
+  "version": 1,
+  "controls": [
+    {
+      "id": "popia-s10",
+      "instrument": "POPIA s10",
+      "class_ids": [
+        "cdr",
+        "charging_financial",
+        "charging_session",
+        "billing_financial",
+        "payment",
+        "identity",
+        "identity_session",
+        "fraud_security",
+        "fraud_configuration",
+        "sbc_security",
+        "report_artifact",
+        "report_configuration",
+        "notification_outbox",
+        "configuration_catalogue_routing"
+      ]
+    },
+    {
+      "id": "popia-s11",
+      "instrument": "POPIA s11",
+      "class_ids": [
+        "cdr",
+        "charging_financial",
+        "charging_session",
+        "billing_financial",
+        "payment",
+        "identity",
+        "identity_session",
+        "fraud_security",
+        "fraud_configuration",
+        "sbc_security",
+        "report_artifact",
+        "report_configuration",
+        "notification_outbox",
+        "configuration_catalogue_routing"
+      ]
+    },
+    {
+      "id": "popia-s19",
+      "instrument": "POPIA s19",
+      "class_ids": [
+        "cdr",
+        "charging_financial",
+        "identity",
+        "identity_session",
+        "fraud_security",
+        "sbc_security",
+        "report_artifact",
+        "report_configuration",
+        "notification_outbox"
+      ]
+    },
+    {
+      "id": "popia-s22",
+      "instrument": "POPIA s22",
+      "class_ids": ["cdr", "identity", "notification_outbox"]
+    },
+    {
+      "id": "popia-ss55-56",
+      "instrument": "POPIA ss55-56",
+      "class_ids": ["identity", "identity_session"]
+    },
+    {
+      "id": "popia-s72",
+      "instrument": "POPIA s72",
+      "class_ids": [
+        "cdr",
+        "charging_financial",
+        "charging_session",
+        "billing_financial",
+        "payment",
+        "identity",
+        "identity_session",
+        "fraud_security",
+        "fraud_configuration",
+        "sbc_security",
+        "report_artifact",
+        "report_configuration",
+        "notification_outbox",
+        "configuration_catalogue_routing"
+      ]
+    },
+    {
+      "id": "rica-kyc",
+      "instrument": "RICA subscriber verification assumption",
+      "class_ids": ["identity", "cdr"]
+    },
+    {
+      "id": "rica-intercept",
+      "instrument": "RICA lawful intercept assumption",
+      "class_ids": ["cdr", "sbc_security"]
+    },
+    {
+      "id": "icasa-licence",
+      "instrument": "ICASA licence-classification assumption",
+      "class_ids": ["configuration_catalogue_routing"]
+    },
+    {
+      "id": "traffic-retention",
+      "instrument": "Traffic-data retention assumption",
+      "class_ids": ["cdr", "billing_financial", "payment"]
+    },
+    {
+      "id": "au-malabo",
+      "instrument": "AU Malabo Convention alignment",
+      "class_ids": [
+        "cdr",
+        "charging_financial",
+        "charging_session",
+        "billing_financial",
+        "payment",
+        "identity",
+        "identity_session",
+        "fraud_security",
+        "fraud_configuration",
+        "sbc_security",
+        "report_artifact",
+        "report_configuration",
+        "notification_outbox",
+        "configuration_catalogue_routing"
+      ]
+    },
+    {
+      "id": "ai-governance",
+      "instrument": "AI governance",
+      "class_ids": ["fraud_security", "fraud_configuration"]
+    }
+  ],
+  "classes": [
+    {
+      "id": "cdr",
+      "purpose": "Bill and reconcile completed calls and support operator traffic reporting.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance and s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Link a call to the billed account."
+        },
+        {
+          "field": "caller_id",
+          "classification": "network",
+          "purpose": "Identify the originating number for billing and fraud controls."
+        },
+        {
+          "field": "destination",
+          "classification": "network",
+          "purpose": "Rate the call and detect toll-fraud prefixes."
+        },
+        {
+          "field": "started_at",
+          "classification": "content",
+          "purpose": "Establish the billing period and call duration."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "mediation",
+          "table": "cdrs",
+          "columns": ["call_id", "account_id", "caller_id", "destination", "started_at"]
+        },
+        {
+          "system": "clickhouse",
+          "database": "reports",
+          "table": "cdrs",
+          "columns": ["call_id", "account_id", "caller_id", "destination", "started_at"]
+        },
+        {
+          "system": "kafka",
+          "database": "",
+          "table": "cdrs.raw",
+          "columns": ["payload"]
+        },
+        {
+          "system": "kafka",
+          "database": "",
+          "table": "cdrs.normalized",
+          "columns": ["payload"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 90,
+        "evidence": ["services/mediation/main.go", "services/reports/main.go", "services/switching/main.go"],
+        "counsel_required": true,
+        "assumption": "Ninety days is an engineering default; statutory traffic-data and billing-retention periods need counsel confirmation."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "charging_financial",
+      "purpose": "Maintain prepaid balances and postpaid charging ledgers.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Identify the charged account."
+        },
+        {
+          "field": "amount_minor",
+          "classification": "financial",
+          "purpose": "Record monetary charging events in minor units."
+        },
+        {
+          "field": "balance_after",
+          "classification": "financial",
+          "purpose": "Record the resulting account balance."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "charging",
+          "table": "accounts",
+          "columns": ["account_id", "balance_minor", "credit_limit_minor"]
+        },
+        {
+          "system": "postgres",
+          "database": "charging",
+          "table": "ledger",
+          "columns": ["account_id", "session_id", "delta_minor", "balance_after"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 2555,
+        "evidence": ["services/charging/migrate.sql", "services/charging/main.go"],
+        "counsel_required": true,
+        "assumption": "Seven years is a conservative financial-record default; counsel must confirm the applicable period."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "charging_session",
+      "purpose": "Track active and completed charging sessions for the OCS.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Link a charging session to the customer account."
+        },
+        {
+          "field": "session_id",
+          "classification": "identifier",
+          "purpose": "Correlate ledger entries with a call."
+        },
+        {
+          "field": "max_seconds",
+          "classification": "financial",
+          "purpose": "Record the authorised call duration."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "charging",
+          "table": "sessions",
+          "columns": ["session_id", "account_id", "started_at", "max_seconds"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 90,
+        "evidence": ["services/charging/migrate.sql"],
+        "counsel_required": false,
+        "assumption": ""
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "billing_financial",
+      "purpose": "Invoice completed calls and maintain per-period billing totals.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Place an invoice line on the correct account."
+        },
+        {
+          "field": "call_id",
+          "classification": "identifier",
+          "purpose": "Deduplicate invoice lines across Kafka replays."
+        },
+        {
+          "field": "amount_minor",
+          "classification": "financial",
+          "purpose": "Record the invoice amount in minor units."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "billing",
+          "table": "invoice_lines",
+          "columns": ["call_id", "account_id", "period", "amount_minor"]
+        },
+        {
+          "system": "postgres",
+          "database": "billing",
+          "table": "cdr_period_totals",
+          "columns": ["account_id", "period", "amount_minor"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 2555,
+        "evidence": ["services/billing/migrate.sql", "services/billing/biller.go"],
+        "counsel_required": true,
+        "assumption": "Seven years is a conservative financial-record default; counsel must confirm the applicable period."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "payment",
+      "purpose": "Record gateway payment webhooks and support reconciliation.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Apply a payment to the customer account."
+        },
+        {
+          "field": "event_id",
+          "classification": "identifier",
+          "purpose": "Deduplicate webhook deliveries."
+        },
+        {
+          "field": "amount_minor",
+          "classification": "financial",
+          "purpose": "Record the received amount in minor units."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "payments",
+          "table": "payments",
+          "columns": ["event_id", "gateway", "account_id", "amount_minor", "created_at"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 2555,
+        "evidence": ["services/payments/migrate.sql", "services/payments/main.go"],
+        "counsel_required": true,
+        "assumption": "Seven years is a conservative financial-record default; counsel must confirm the applicable period."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "identity",
+      "purpose": "Authenticate operators and authorise tenant-scoped access.",
+      "lawful_basis": "POPIA s11(1)(b) contract performance and s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "email",
+          "classification": "contact",
+          "purpose": "Identify users and deliver scheduled-report notifications."
+        },
+        {
+          "field": "password_hash",
+          "classification": "security",
+          "purpose": "Verify user passwords without storing plaintext."
+        },
+        {
+          "field": "role",
+          "classification": "security",
+          "purpose": "Enforce admin, reseller, and user authorisation."
+        },
+        {
+          "field": "tenant_id",
+          "classification": "identifier",
+          "purpose": "Enforce tenant scoping."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "identity",
+          "table": "tenants",
+          "columns": ["tenant_id", "name"]
+        },
+        {
+          "system": "postgres",
+          "database": "identity",
+          "table": "users",
+          "columns": ["user_id", "tenant_id", "email", "password_hash", "role"]
+        },
+        {
+          "system": "postgres",
+          "database": "identity",
+          "table": "accounts",
+          "columns": ["account_id", "tenant_id"]
+        }
+      ],
+      "retention": {
+        "kind": "until_account_closure",
+        "evidence": ["services/identity/migrate.sql", "services/identity/identity.go"],
+        "counsel_required": true,
+        "assumption": "Closure criteria and post-closure retention need counsel validation."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "identity_session",
+      "purpose": "Maintain short-lived authenticated browser and API sessions.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "token",
+          "classification": "security",
+          "purpose": "Authenticate a request without re-sending credentials."
+        },
+        {
+          "field": "user_id",
+          "classification": "identifier",
+          "purpose": "Bind a session to an authenticated user."
+        },
+        {
+          "field": "expires_at",
+          "classification": "security",
+          "purpose": "Expire sessions after 24 hours."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "identity",
+          "table": "sessions",
+          "columns": ["token", "user_id", "expires_at"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 1,
+        "evidence": ["services/identity/identity.go", "services/identity/migrate.sql"],
+        "counsel_required": false,
+        "assumption": ""
+      },
+      "enforcement_status": "existing"
+    },
+    {
+      "id": "fraud_security",
+      "purpose": "Detect toll fraud and retain security alerts and usage for investigation.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "account_id",
+          "classification": "identifier",
+          "purpose": "Apply velocity controls to the calling account."
+        },
+        {
+          "field": "caller_id",
+          "classification": "network",
+          "purpose": "Detect caller-ID fraud patterns."
+        },
+        {
+          "field": "destination",
+          "classification": "network",
+          "purpose": "Detect high-risk called prefixes."
+        },
+        {
+          "field": "score",
+          "classification": "security",
+          "purpose": "Record advisory fraud scores for alerting."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "daily_usage",
+          "columns": ["account_id", "dest_prefix", "call_date", "call_count"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "reservations",
+          "columns": ["call_id", "account_id", "caller_id", "destination"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "processed_cdrs",
+          "columns": ["call_id", "account_id"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "alerts",
+          "columns": ["call_id", "account_id", "score", "reasons"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 365,
+        "evidence": ["services/fraud/migrate.sql", "services/fraud/fraud.go"],
+        "counsel_required": true,
+        "assumption": "One year is an engineering default; counsel must confirm fraud-investigation retention needs."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "fraud_configuration",
+      "purpose": "Maintain deterministic fraud policies and operator-managed blocks.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "prefix",
+          "classification": "network",
+          "purpose": "Block or score high-risk destination ranges."
+        },
+        {
+          "field": "caller_id",
+          "classification": "network",
+          "purpose": "Block known fraudulent caller IDs."
+        },
+        {
+          "field": "enabled",
+          "classification": "security",
+          "purpose": "Control policy activation."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "fraud_controls",
+          "columns": ["key", "value"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "prefix_blocks",
+          "columns": ["prefix", "reason", "enabled"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "cli_blocks",
+          "columns": ["caller_id", "reason", "enabled"]
+        },
+        {
+          "system": "postgres",
+          "database": "fraud",
+          "table": "risk_prefixes",
+          "columns": ["prefix", "risk", "enabled"]
+        }
+      ],
+      "retention": {
+        "kind": "until_deleted",
+        "evidence": ["services/fraud/migrate.sql"],
+        "counsel_required": false,
+        "assumption": ""
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "sbc_security",
+      "purpose": "Enforce session-border barring, trunk limits, and intrusion blocks.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "source_ip",
+          "classification": "network",
+          "purpose": "Detect and block repeated authentication failures."
+        },
+        {
+          "field": "call_id",
+          "classification": "identifier",
+          "purpose": "Track active call slots."
+        },
+        {
+          "field": "trunk_id",
+          "classification": "network",
+          "purpose": "Enforce per-trunk concurrency limits."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "sbc",
+          "table": "auth_failures",
+          "columns": ["source_ip", "occurred_at"]
+        },
+        {
+          "system": "postgres",
+          "database": "sbc",
+          "table": "active_calls",
+          "columns": ["call_id", "trunk_id", "started_at"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 30,
+        "evidence": ["services/sbc/migrate.sql", "services/sbc/sbc.go"],
+        "counsel_required": false,
+        "assumption": ""
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "report_artifact",
+      "purpose": "Store generated scheduled-report CSV artifacts for download and notification.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "artifact_id",
+          "classification": "identifier",
+          "purpose": "Identify a generated artifact."
+        },
+        {
+          "field": "recipient_email",
+          "classification": "contact",
+          "purpose": "Notify the schedule creator that an artifact is ready."
+        },
+        {
+          "field": "content",
+          "classification": "content",
+          "purpose": "Deliver the operator-requested report."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "reports_sched",
+          "table": "report_artifacts",
+          "columns": ["artifact_id", "schedule_id", "slot_key", "recipient_email", "content"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 90,
+        "evidence": ["services/reports/main.go", "services/reports/sched_migrate.sql"],
+        "counsel_required": true,
+        "assumption": "Ninety days matches the current prune default; counsel must confirm artifact retention needs."
+      },
+      "enforcement_status": "existing"
+    },
+    {
+      "id": "report_configuration",
+      "purpose": "Store operator-defined recurring report schedules.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "created_by",
+          "classification": "identifier",
+          "purpose": "Attribute a schedule to its creator."
+        },
+        {
+          "field": "recipient_email",
+          "classification": "contact",
+          "purpose": "Deliver generated artifact notifications."
+        },
+        {
+          "field": "kind",
+          "classification": "content",
+          "purpose": "Define which report the schedule renders."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "reports_sched",
+          "table": "schedules",
+          "columns": ["schedule_id", "tenant_id", "created_by", "recipient_email", "kind"]
+        }
+      ],
+      "retention": {
+        "kind": "until_deleted",
+        "evidence": ["services/reports/sched_migrate.sql", "services/reports/main.go"],
+        "counsel_required": false,
+        "assumption": ""
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "notification_outbox",
+      "purpose": "Provide a durable outbox for scheduled-report email delivery.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "recipient_email",
+          "classification": "contact",
+          "purpose": "Deliver a report-ready notification."
+        },
+        {
+          "field": "artifact_id",
+          "classification": "identifier",
+          "purpose": "Correlate the notification with its artifact."
+        },
+        {
+          "field": "status",
+          "classification": "security",
+          "purpose": "Track send and retry state."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "notifications",
+          "table": "outbox",
+          "columns": ["artifact_id", "recipient_email", "status", "attempts", "created_at"]
+        }
+      ],
+      "retention": {
+        "kind": "fixed_days",
+        "days": 90,
+        "evidence": ["services/notifications/migrate.sql", "services/notifications/main.go"],
+        "counsel_required": true,
+        "assumption": "Ninety days is an engineering default; counsel must confirm outbox retention needs."
+      },
+      "enforcement_status": "documented_target"
+    },
+    {
+      "id": "configuration_catalogue_routing",
+      "purpose": "Maintain rates, dial plans, LCR routes, trunks, and SBC policy configuration.",
+      "lawful_basis": "POPIA s11(1)(f) legitimate interest",
+      "personal_data": [
+        {
+          "field": "prefix",
+          "classification": "network",
+          "purpose": "Match dialled numbers to rates, routes, or barring rules."
+        },
+        {
+          "field": "trunk_id",
+          "classification": "network",
+          "purpose": "Select an outbound trunk and enforce trunk limits."
+        },
+        {
+          "field": "rate_per_sec",
+          "classification": "financial",
+          "purpose": "Price calls in minor units per second."
+        }
+      ],
+      "storage": [
+        {
+          "system": "postgres",
+          "database": "catalogue",
+          "table": "rates",
+          "columns": ["prefix", "rate_per_sec"]
+        },
+        {
+          "system": "postgres",
+          "database": "routing",
+          "table": "rules",
+          "columns": ["prefix", "trunk_id"]
+        },
+        {
+          "system": "postgres",
+          "database": "routing",
+          "table": "lcr_routes",
+          "columns": ["prefix", "trunk_id", "cost_minor"]
+        },
+        {
+          "system": "postgres",
+          "database": "routing",
+          "table": "trunks",
+          "columns": ["trunk_id", "target_uri", "enabled"]
+        },
+        {
+          "system": "postgres",
+          "database": "sbc",
+          "table": "barring_rules",
+          "columns": ["direction", "prefix", "enabled"]
+        },
+        {
+          "system": "postgres",
+          "database": "sbc",
+          "table": "trunk_limits",
+          "columns": ["trunk_id", "max_calls"]
+        }
+      ],
+      "retention": {
+        "kind": "until_deleted",
+        "evidence": ["services/catalogue/migrate.sql", "services/routing/migrate.sql", "services/sbc/migrate.sql"],
+        "counsel_required": true,
+        "assumption": "ICASA licence-classification requirements for routing and numbering configuration need counsel validation."
+      },
+      "enforcement_status": "documented_target"
+    }
+  ]
+}
