@@ -12,6 +12,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.27"
+      - name: Clean-room audit
+        run: make cleanroom
+      - name: Upload clean-room report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanroom-report
+          path: artifacts/cleanroom/
       - name: Start data layer
         run: docker compose up -d --wait
       - name: Go tests

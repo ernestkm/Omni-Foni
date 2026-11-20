@@ -1,4 +1,4 @@
-.PHONY: up down ps smoke logs test protoc compliance up-gvisor down-gvisor check-gvisor smoke-gvisor
+.PHONY: up down ps smoke logs test protoc compliance cleanroom up-gvisor down-gvisor check-gvisor smoke-gvisor
 
 COMPOSE_GVISOR := docker compose -f docker-compose.yml -f docker-compose.gvisor.yml
 
@@ -33,7 +33,10 @@ smoke-gvisor:
 compliance:
 	cd tools/compliancecheck && go vet ./... && go test ./... && go run . ../../docs/compliance/data-classification.json
 
-test: compliance
+cleanroom:
+	cd tools/cleanroomcheck && go vet ./... && go test ./... && go run . -policy ../../docs/compliance/cleanroom-policy.json -report ../../artifacts/cleanroom
+
+test: compliance cleanroom
 	cd services/billing && go vet ./... && go test ./...
 	cd services/catalogue && go vet ./... && go test ./...
 	cd services/charging && go vet ./... && go test ./...
