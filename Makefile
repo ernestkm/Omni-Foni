@@ -1,4 +1,4 @@
-.PHONY: up down ps smoke logs test protoc
+.PHONY: up down ps smoke logs test protoc compliance
 
 up:
 	docker compose up -d --wait
@@ -15,7 +15,10 @@ logs:
 smoke:
 	bash ops/smoke.sh
 
-test:
+compliance:
+	cd tools/compliancecheck && go vet ./... && go test ./... && go run . ../../docs/compliance/data-classification.json
+
+test: compliance
 	cd services/billing && go vet ./... && go test ./...
 	cd services/catalogue && go vet ./... && go test ./...
 	cd services/charging && go vet ./... && go test ./...
