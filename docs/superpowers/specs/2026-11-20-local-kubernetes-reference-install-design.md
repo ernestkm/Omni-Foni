@@ -95,8 +95,10 @@ are required. No new service, endpoint, topic, or money rule is introduced.
   `mediation`, `payments`, `identity`, `reconciliation`, `fraud`, `sbc`,
   `notifications`, `reports`, `sipedge`, `sipuas`, `kamailio`, `jaeger`,
   `mailpit`.
-- Jobs: database initialization and first-call seeding. The first SIP call is
-  run from the host through `kind` host ports, not as an in-cluster Job.
+- Jobs: database initialization only. Seeding is performed by
+  `ops/k8s-seed.sh` from the host through APIs and narrow SQL fallbacks. The
+  first SIP call is run from the host through `kind` host ports, not as an
+  in-cluster Job.
 
 All application images are built with the same Dockerfile context rules used by
 compose, especially the sibling `COPY` requirements for services that use local
@@ -116,8 +118,8 @@ explicitly out of scope for this slice.
 
 `make k8s-install` performs these steps:
 
-1. Check prerequisites: Docker, `kind`, `kubectl`, `make`, `bash`, `curl`, and
-   GNU coreutils.
+1. Check prerequisites: Docker, `kind`, `kubectl`, `make`, `bash`, `curl`,
+   `grpcurl`, Go, Python 3, and GNU coreutils.
 2. Create the `omnifoni-k8s` kind cluster if absent.
 3. Build the local service images named by `docker-compose.yml`.
 4. Load those images into the kind cluster.
@@ -147,7 +149,7 @@ existence checks so reruns do not duplicate rows.
 1. Calls `ops/k8s-seed.sh` if the seed marker is absent.
 2. Runs a probe SIP call from the host through `kind` host ports. The probe is
    expected to be denied as `ip_blocked`; the script extracts the source IP that
-   Kamailio passed to sipedge from the sipedge structured log.
+   Kamailio passed to sipedge from the exported sipedge trace.
 3. Patches `SIPEDGE_TRUNK_ACCOUNTS` in the reference overlay with that source IP
    and rolls out sipedge, then reruns the probe until it is allowed.
 4. Generates a unique SIP Call-ID and runs the existing `cmd/sipsmoke` from the
@@ -223,7 +225,8 @@ Out of scope:
 - **API gaps:** several seed surfaces lack admin APIs. The SQL fallback is
   explicit, narrow, and keyed to stable IDs.
 - **SIP ingress**: UDP host-port mapping in kind can be host dependent, and the
-  source IP seen by sipedge is discovered by a probe call before the real call.
+  source IP seen by sipedge is discovered from the probe call's exported trace
+  before the real call.
   The operator guide documents the supported Linux path and diagnosis steps.
 - **Timing interpretation:** image build time is included in the install gate;
   the printed breakdown distinguishes build, rollout, seed, call, and assertion.
