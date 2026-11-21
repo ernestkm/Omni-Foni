@@ -29,7 +29,8 @@
     ".git/",
     ".worktrees/",
     "artifacts/",
-    ".superpowers/"
+    ".superpowers/",
+    "services/sipedge/sipsmoke"
   ],
   "forbidden_artifact_patterns": [
     { "pattern": "vendor/astpp*", "severity": "high" },
